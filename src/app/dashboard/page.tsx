@@ -38,6 +38,46 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      console.log(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      console.log(file);
+    }
+  };
+
+  const triggerFileInput = () => {
+    document.getElementById("file-upload")?.click();
+  };
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   useEffect(() => {
     const session = localStorage.getItem("auth_session");
     if (!session) {
@@ -77,14 +117,36 @@ export default function DashboardPage() {
               <CardDescription>Unggah sertifikat baru</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col items-center justify-center gap-4 py-6 flex-1">
-              <div className="flex h-36 w-full flex-col items-center justify-center rounded-md border border-dashed border-zinc-200 bg-white p-4 text-zinc-500">
-                <div className="text-2xl">📤</div>
-                <div className="mt-2 text-sm text-zinc-600">
-                  Tarik atau pilih file untuk mengunggah
-                </div>
+              <div
+                className="flex h-36 w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-zinc-200 bg-white p-4 text-zinc-500 hover:bg-zinc-50 transition-colors relative overflow-hidden"
+                onClick={triggerFileInput}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+              >
+                <Input
+                  type="file"
+                  id="file-upload"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                  accept="image/*"
+                />
+                {previewUrl ? (
+                  <img
+                    src={previewUrl}
+                    alt="Preview"
+                    className="h-full w-full object-contain"
+                  />
+                ) : (
+                  <>
+                    <div className="text-2xl">📤</div>
+                    <div className="mt-2 text-sm text-zinc-600">
+                      Tarik atau pilih file untuk mengunggah
+                    </div>
+                  </>
+                )}
               </div>
               <div className="w-full text-right">
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={triggerFileInput}>
                   Pilih File
                 </Button>
               </div>
@@ -119,12 +181,12 @@ export default function DashboardPage() {
               </div>
               <div className="flex gap-2 justify-end">
                 <Link href="/pengaturan">
-                    <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm">
                     Edit Profil
-                    </Button>
+                  </Button>
                 </Link>
                 <Link href="/pengaturan">
-                    <Button size="sm">Pengaturan</Button>
+                  <Button size="sm">Pengaturan</Button>
                 </Link>
               </div>
             </CardContent>
