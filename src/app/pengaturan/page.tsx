@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -30,6 +31,85 @@ import {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile")
+  const [user, setUser] = useState<any>(null)
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const router = useRouter()
+
+  useEffect(() => {
+    const session = localStorage.getItem("auth_session")
+    if (session) {
+      const userData = JSON.parse(session)
+      setUser(userData)
+      setName(userData.name)
+      setEmail(userData.email)
+    } else {
+      router.push("/login")
+    }
+  }, [router])
+
+  const handleSaveProfile = () => {
+    setMessage(null)
+    if (!user) return
+
+    try {
+      const users = JSON.parse(localStorage.getItem("auth_users") || "[]")
+      const updatedUsers = users.map((u: any) => {
+        if (u.email === user.email) { // Identify by original email
+          return { ...u, name, email }
+        }
+        return u
+      })
+
+      localStorage.setItem("auth_users", JSON.stringify(updatedUsers))
+      
+      const updatedUser = { ...user, name, email }
+      localStorage.setItem("auth_session", JSON.stringify(updatedUser))
+      setUser(updatedUser)
+      
+      // Notify other components
+      window.dispatchEvent(new Event("auth-change"))
+
+      setMessage({ type: "success", text: "Profil berhasil diperbarui!" })
+    } catch (error) {
+      setMessage({ type: "error", text: "Gagal menyimpan perubahan." })
+    }
+  }
+
+  const handleDeleteAccount = () => {
+    if (deleteConfirmation !== "DELETE") {
+      setMessage({ type: "error", text: "Silakan ketik DELETE dengan benar." })
+      return
+    }
+
+    try {
+      const users = JSON.parse(localStorage.getItem("auth_users") || "[]")
+      const updatedUsers = users.filter((u: any) => u.email !== user.email)
+      
+      localStorage.setItem("auth_users", JSON.stringify(updatedUsers))
+      localStorage.removeItem("auth_session")
+      
+      window.dispatchEvent(new Event("auth-change"))
+      router.push("/login")
+    } catch (error) {
+      setMessage({ type: "error", text: "Gagal menghapus akun." })
+    }
+  }
+
+  if (!user) return null
+
+  const getInitials = (name: string) => {
+      return name
+          ? name
+              .split(" ")
+              .map((n) => n[0])
+              .join("")
+              .toUpperCase()
+              .substring(0, 2)
+          : "US";
+  };
 
   return (
     <div className="container mx-auto py-10 px-4 max-w-5xl">
@@ -41,46 +121,48 @@ export default function SettingsPage() {
       </div>
       <Separator className="my-6" />
       <div className="flex flex-col space-y-8 lg:flex-row lg:space-x-12 lg:space-y-0">
-        <aside className="-mx-4 lg:w-1/5">
+        <aside className="-mx-4 lg:w-1/5 overflow-x-auto lg:overflow-visible">
           <Tabs
-            orientation="vertical"
             defaultValue="profile"
             value={activeTab}
-            onValueChange={setActiveTab}
-            className="flex flex-col space-y-1"
+            onValueChange={(val) => {
+                setActiveTab(val)
+                setMessage(null)
+            }}
+            className="flex flex-col space-y-1 lg:space-y-0"
           >
-            <TabsList className="flex flex-col h-auto items-stretch bg-transparent p-0 space-y-1">
+            <TabsList className="flex flex-row lg:flex-col h-auto items-center lg:items-stretch bg-transparent p-0 space-x-2 lg:space-x-0 lg:space-y-1 w-full justify-start px-4 lg:px-0">
               <TabsTrigger
                 value="profile"
-                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md"
+                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md whitespace-nowrap"
               >
                 <User className="mr-2 h-4 w-4" />
                 Profile
               </TabsTrigger>
               <TabsTrigger
                 value="appearance"
-                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md"
+                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md whitespace-nowrap"
               >
                 <Palette className="mr-2 h-4 w-4" />
                 Tampilan
               </TabsTrigger>
               <TabsTrigger
                 value="notifications"
-                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md"
+                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md whitespace-nowrap"
               >
                 <Bell className="mr-2 h-4 w-4" />
                 Notifikasi
               </TabsTrigger>
               <TabsTrigger
                 value="security"
-                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md"
+                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-muted hover:bg-muted/50 transition-colors rounded-md whitespace-nowrap"
               >
                 <Shield className="mr-2 h-4 w-4" />
                 Keamanan
               </TabsTrigger>
               <TabsTrigger
                 value="danger"
-                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-red-100 text-red-600 hover:bg-red-50 transition-colors rounded-md mt-4"
+                className="justify-start px-4 py-2 h-9 data-[state=active]:bg-red-100 text-red-600 hover:bg-red-50 transition-colors rounded-md mt-0 lg:mt-4 whitespace-nowrap"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Danger Zone
@@ -89,6 +171,12 @@ export default function SettingsPage() {
           </Tabs>
         </aside>
         <div className="flex-1 lg:max-w-2xl">
+          {message && (
+            <div className={`mb-4 p-3 rounded-md text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+              {message.text}
+            </div>
+          )}
+
           {/* Profile Section */}
           <div className={activeTab === "profile" ? "block" : "hidden"}>
             <Card>
@@ -102,7 +190,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-x-6">
                   <Avatar className="h-20 w-20">
                     <AvatarImage src="/placeholder-avatar.jpg" />
-                    <AvatarFallback className="text-lg">CN</AvatarFallback>
+                    <AvatarFallback className="text-lg">{getInitials(name)}</AvatarFallback>
                   </Avatar>
                   <Button variant="outline" size="sm" className="gap-2">
                     <Camera className="h-4 w-4" />
@@ -112,16 +200,27 @@ export default function SettingsPage() {
                 <div className="space-y-4">
                   <div className="grid gap-2">
                     <Label htmlFor="full-name">Nama Lengkap</Label>
-                    <Input id="full-name" placeholder="Masukkan nama lengkap Anda" defaultValue="Ridlo F" />
+                    <Input 
+                        id="full-name" 
+                        placeholder="Masukkan nama lengkap Anda" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                    />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="nama@example.com" defaultValue="ridlo@example.com" />
+                    <Input 
+                        id="email" 
+                        type="email" 
+                        placeholder="nama@example.com" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                    />
                   </div>
                 </div>
               </CardContent>
               <CardFooter>
-                <Button>Simpan Perubahan</Button>
+                <Button onClick={handleSaveProfile}>Simpan Perubahan</Button>
               </CardFooter>
             </Card>
           </div>
@@ -266,10 +365,15 @@ export default function SettingsPage() {
                 <div className="text-sm text-muted-foreground mb-4">
                   Silakan ketik <strong>DELETE</strong> untuk mengonfirmasi.
                 </div>
-                <Input className="bg-white dark:bg-slate-950" placeholder="DELETE" />
+                <Input 
+                    className="bg-white dark:bg-slate-950" 
+                    placeholder="DELETE" 
+                    value={deleteConfirmation}
+                    onChange={(e) => setDeleteConfirmation(e.target.value)}
+                />
               </CardContent>
               <CardFooter>
-                <Button variant="destructive" className="w-full sm:w-auto">Hapus Akun Saya</Button>
+                <Button variant="destructive" className="w-full sm:w-auto" onClick={handleDeleteAccount}>Hapus Akun Saya</Button>
               </CardFooter>
             </Card>
           </div>

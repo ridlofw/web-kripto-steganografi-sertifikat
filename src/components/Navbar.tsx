@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, Menu, Settings, User, ShieldCheck, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,14 +21,51 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export function Navbar() {
     const pathname = usePathname();
+    const router = useRouter();
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+    const [user, setUser] = useState<any>(null);
+
+    useEffect(() => {
+        const checkSession = () => {
+            const session = localStorage.getItem("auth_session");
+            if (session) {
+                setUser(JSON.parse(session));
+            } else {
+                setUser(null);
+            }
+        };
+
+        checkSession();
+
+        window.addEventListener("auth-change", checkSession);
+        return () => window.removeEventListener("auth-change", checkSession);
+    }, []);
+
+    const handleLogout = () => {
+        localStorage.removeItem("auth_session");
+        setUser(null);
+        window.dispatchEvent(new Event("auth-change"));
+        router.push("/login");
+        router.refresh();
+    };
+
+    const getInitials = (name: string) => {
+        return name
+            ? name
+                .split(" ")
+                .map((n) => n[0])
+                .join("")
+                .toUpperCase()
+                .substring(0, 2)
+            : "US";
+    };
 
     const navItems = [
-        { name: "Beranda", href: "/", icon: Home },
+        { name: "Beranda", href: user ? "/dashboard" : "/", icon: Home },
         { name: "Verifikasi", href: "/verifikasi", icon: ShieldCheck },
         { name: "Pengaturan", href: "/pengaturan", icon: Settings },
     ];
@@ -99,31 +136,39 @@ export function Navbar() {
                         </Sheet>
 
                         {/* User Menu */}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                                    <Avatar className="h-8 w-8">
-                                        <AvatarImage src="/avatars/01.png" alt="@user" />
-                                        <AvatarFallback>US</AvatarFallback>
-                                    </Avatar>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-56" align="end" forceMount>
-                                <DropdownMenuLabel className="font-normal">
-                                    <div className="flex flex-col space-y-1">
-                                        <p className="text-sm font-medium leading-none">User</p>
-                                        <p className="text-xs leading-none text-muted-foreground">
-                                            user@example.com
-                                        </p>
-                                    </div>
-                                </DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
-                                    <Link href="/pengaturan">Pengaturan</Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>Log out</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        {user ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                                        <Avatar className="h-8 w-8">
+                                            <AvatarImage src="/avatars/01.png" alt="@user" />
+                                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                                        </Avatar>
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="w-56" align="end" forceMount>
+                                    <DropdownMenuLabel className="font-normal">
+                                        <div className="flex flex-col space-y-1">
+                                            <p className="text-sm font-medium leading-none">{user.name}</p>
+                                            <p className="text-xs leading-none text-muted-foreground">
+                                                {user.email}
+                                            </p>
+                                        </div>
+                                    </DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem asChild>
+                                        <Link href="/pengaturan">Pengaturan</Link>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600">
+                                        Log out
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ) : (
+                            <Link href="/login">
+                                <Button size="sm">Masuk</Button>
+                            </Link>
+                        )}
 
                         {/* Mobile Menu Trigger */}
                         <Sheet>
@@ -176,20 +221,32 @@ export function Navbar() {
                                     </div>
 
                                     {/* Footer / User Section */}
-                                    <div className="p-6 border-t bg-muted/20">
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
-                                                <AvatarImage src="/avatars/01.png" alt="@user" />
-                                                <AvatarFallback>US</AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-medium">User Name</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    user@example.com
-                                                </span>
+                                    {user && (
+                                        <div className="p-6 border-t bg-muted/20">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 border-2 border-background shadow-sm">
+                                                    <AvatarImage src="/avatars/01.png" alt="@user" />
+                                                    <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium">{user.name}</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {user.email}
+                                                    </span>
+                                                </div>
                                             </div>
+                                            <Button variant="outline" className="w-full mt-4 text-red-600 hover:text-red-700 hover:bg-red-50" onClick={handleLogout}>
+                                                Log out
+                                            </Button>
                                         </div>
-                                    </div>
+                                    )}
+                                    {!user && (
+                                         <div className="p-6 border-t bg-muted/20">
+                                            <Link href="/login">
+                                                <Button className="w-full">Masuk</Button>
+                                            </Link>
+                                         </div>
+                                    )}
                                 </div>
                             </SheetContent>
                         </Sheet>

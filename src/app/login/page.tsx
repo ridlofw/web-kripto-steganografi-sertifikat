@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,16 +11,86 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 export default function AuthPage({ initialSignUp = false }: { initialSignUp?: boolean }) {
   const [isSignUp, setIsSignUp] = useState(initialSignUp);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const router = useRouter();
+
+  // Form States
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const toggleMode = () => {
     setIsSignUp(!isSignUp);
+    setMessage(null);
+    setName("");
+    setEmail("");
+    setPassword("");
+  };
+
+  const handleSignUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+
+    if (!name || !email || !password) {
+      setMessage({ type: "error", text: "Please fill in all fields" });
+      return;
+    }
+
+    try {
+      const existingUsers = JSON.parse(localStorage.getItem("auth_users") || "[]");
+      const userExists = existingUsers.some((u: any) => u.email === email);
+
+      if (userExists) {
+        setMessage({ type: "error", text: "Email already registered" });
+        return;
+      }
+
+      const newUser = { name, email, password };
+      localStorage.setItem("auth_users", JSON.stringify([...existingUsers, newUser]));
+      
+      setMessage({ type: "success", text: "Account created! Please sign in." });
+      setTimeout(() => {
+        toggleMode();
+      }, 1500);
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to register" });
+    }
+  };
+
+  const handleSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    setMessage(null);
+
+    if (!email || !password) {
+      setMessage({ type: "error", text: "Please fill in all fields" });
+      return;
+    }
+
+    try {
+      const users = JSON.parse(localStorage.getItem("auth_users") || "[]");
+      const user = users.find((u: any) => u.email === email && u.password === password);
+
+      if (user) {
+        localStorage.setItem("auth_session", JSON.stringify(user));
+        // Dispatch custom event for Navbar update
+        window.dispatchEvent(new Event("auth-change"));
+        
+        setMessage({ type: "success", text: "Login successful! Redirecting..." });
+        setTimeout(() => {
+          router.push("/dashboard");
+        }, 1000);
+      } else {
+        setMessage({ type: "error", text: "Invalid email or password" });
+      }
+    } catch (error) {
+      setMessage({ type: "error", text: "Failed to login" });
+    }
   };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-4 overflow-hidden" suppressHydrationWarning>
       <div className="relative w-full max-w-[850px] min-h-[550px] bg-white rounded-[20px] shadow-2xl overflow-hidden flex flex-col md:flex-row">
         
-        {/* Sign In Form Container */}
         {/* Sign In Form Container */}
         <div className={`absolute top-0 left-0 h-full w-full md:w-1/2 transition-all duration-700 ease-in-out z-20 ${isSignUp ? "md:translate-x-full opacity-0 pointer-events-none" : "opacity-100"}`}>
           <FormContainer title={isForgotPassword ? "Reset Password" : "Sign In"} description={isForgotPassword ? "Masukkan email Anda" : "Akses brankas sertifikat digital Anda yang telah diamankan."}>
@@ -32,15 +103,32 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
                   exit={{ opacity: 0, x: 20 }}
                   transition={{ duration: 0.3 }}
                   className="flex flex-col gap-4 w-full max-w-xs mx-auto"
-                  onSubmit={(e) => e.preventDefault()}
+                  onSubmit={handleSignIn}
                 >
-                  <div className="grid gap-2">
+                  {message && !isSignUp && (
+                    <div className={`text-xs p-2 rounded ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                      {message.text}
+                    </div>
+                  )}
+                  <div className="grid gap-2 text-left">
                     <Label htmlFor="signin-email">Email</Label>
-                    <Input id="signin-email" type="email" placeholder="m@example.com" />
+                    <Input 
+                      id="signin-email" 
+                      type="email" 
+                      placeholder="m@example.com" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 text-left">
                     <Label htmlFor="signin-password">Password</Label>
-                    <Input id="signin-password" type="password" placeholder="••••••••" />
+                    <Input 
+                      id="signin-password" 
+                      type="password" 
+                      placeholder="••••••••" 
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                    />
                   </div>
                   <Button className="w-full mt-2 bg-zinc-900 hover:bg-zinc-800 text-white">Sign In</Button>
                   <div className="text-center mt-2">
@@ -64,7 +152,7 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
                     setIsForgotPassword(false);
                   }}
                 >
-                  <div className="grid gap-2">
+                  <div className="grid gap-2 text-left">
                     <Label htmlFor="reset-email">Email</Label>
                     <Input id="reset-email" type="email" placeholder="m@example.com" required />
                   </div>
@@ -83,19 +171,41 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
         {/* Sign Up Form Container */}
         <div className={`absolute top-0 left-0 h-full w-full md:w-1/2 transition-all duration-700 ease-in-out z-10 ${isSignUp ? "md:translate-x-full opacity-100 z-30" : "opacity-0 z-10"}`}>
            <FormContainer title="Create Account" description="Daftarkan identitas Anda untuk memulai transaksi properti dengan enkripsi end-to-end.">
-            <form className="flex flex-col gap-4 w-full max-w-xs mx-auto" onSubmit={(e) => e.preventDefault()}>
-
-              <div className="grid gap-2">
+            <form className="flex flex-col gap-4 w-full max-w-xs mx-auto" onSubmit={handleSignUp}>
+              {message && isSignUp && (
+                <div className={`text-xs p-2 rounded ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                  {message.text}
+                </div>
+              )}
+              <div className="grid gap-2 text-left">
                 <Label htmlFor="signup-name">Name</Label>
-                <Input id="signup-name" type="text" placeholder="John Doe" />
+                <Input 
+                  id="signup-name" 
+                  type="text" 
+                  placeholder="John Doe" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 text-left">
                 <Label htmlFor="signup-email">Email</Label>
-                <Input id="signup-email" type="email" placeholder="m@example.com" />
+                <Input 
+                  id="signup-email" 
+                  type="email" 
+                  placeholder="m@example.com" 
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
               </div>
-              <div className="grid gap-2">
+              <div className="grid gap-2 text-left">
                 <Label htmlFor="signup-password">Password</Label>
-                <Input id="signup-password" type="password" placeholder="••••••••" />
+                <Input 
+                  id="signup-password" 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
               </div>
               <Button className="w-full mt-2 bg-zinc-900 hover:bg-zinc-800 text-white">Sign Up</Button>
             </form>
