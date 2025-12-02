@@ -65,7 +65,7 @@ export function Navbar() {
     };
 
     const navItems = [
-        { name: "Beranda", href: user ? "/dashboard" : "/", icon: Home },
+        { name: "Beranda", href: "/", icon: Home },
         { name: "Verifikasi", href: "/verifikasi", icon: ShieldCheck },
         { name: "Pengaturan", href: "/pengaturan", icon: Settings },
     ];
@@ -95,8 +95,8 @@ export function Navbar() {
                                 key={item.href}
                                 href={item.href}
                                 className={`text-sm font-medium transition-colors hover:text-blue-600 ${pathname === item.href
-                                        ? "text-blue-600"
-                                        : "text-muted-foreground"
+                                    ? "text-blue-600"
+                                    : "text-muted-foreground"
                                     }`}
                             >
                                 {item.name}
@@ -204,14 +204,14 @@ export function Navbar() {
                                                     key={item.href}
                                                     href={item.href}
                                                     className={`group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 ${isActive
-                                                            ? "bg-blue-50 text-blue-600 shadow-sm"
-                                                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                                        ? "bg-blue-50 text-blue-600 shadow-sm"
+                                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
                                                         }`}
                                                 >
                                                     <item.icon
                                                         className={`h-5 w-5 transition-colors ${isActive
-                                                                ? "text-blue-600"
-                                                                : "text-muted-foreground group-hover:text-foreground"
+                                                            ? "text-blue-600"
+                                                            : "text-muted-foreground group-hover:text-foreground"
                                                             }`}
                                                     />
                                                     {item.name}
@@ -241,11 +241,11 @@ export function Navbar() {
                                         </div>
                                     )}
                                     {!user && (
-                                         <div className="p-6 border-t bg-muted/20">
+                                        <div className="p-6 border-t bg-muted/20">
                                             <Link href="/login">
                                                 <Button className="w-full">Masuk</Button>
                                             </Link>
-                                         </div>
+                                        </div>
                                     )}
                                 </div>
                             </SheetContent>

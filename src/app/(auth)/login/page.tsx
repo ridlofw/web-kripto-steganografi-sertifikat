@@ -6,7 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+
+
+interface User {
+  name?: string;
+  email: string;
+  password?: string;
+}
 
 export default function AuthPage({ initialSignUp = false }: { initialSignUp?: boolean }) {
   const [isSignUp, setIsSignUp] = useState(initialSignUp);
@@ -38,7 +44,7 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
 
     try {
       const existingUsers = JSON.parse(localStorage.getItem("auth_users") || "[]");
-      const userExists = existingUsers.some((u: any) => u.email === email);
+      const userExists = existingUsers.some((u: User) => u.email === email);
 
       if (userExists) {
         setMessage({ type: "error", text: "Email already registered" });
@@ -47,12 +53,12 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
 
       const newUser = { name, email, password };
       localStorage.setItem("auth_users", JSON.stringify([...existingUsers, newUser]));
-      
+
       setMessage({ type: "success", text: "Account created! Please sign in." });
       setTimeout(() => {
         toggleMode();
       }, 1500);
-    } catch (error) {
+    } catch {
       setMessage({ type: "error", text: "Failed to register" });
     }
   };
@@ -68,13 +74,13 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
 
     try {
       const users = JSON.parse(localStorage.getItem("auth_users") || "[]");
-      const user = users.find((u: any) => u.email === email && u.password === password);
+      const user = users.find((u: User) => u.email === email && u.password === password);
 
       if (user) {
         localStorage.setItem("auth_session", JSON.stringify(user));
         // Dispatch custom event for Navbar update
         window.dispatchEvent(new Event("auth-change"));
-        
+
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         setTimeout(() => {
           router.push("/dashboard");
@@ -82,7 +88,7 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
       } else {
         setMessage({ type: "error", text: "Invalid email or password" });
       }
-    } catch (error) {
+    } catch {
       setMessage({ type: "error", text: "Failed to login" });
     }
   };
@@ -90,7 +96,7 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
   return (
     <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-4 overflow-hidden" suppressHydrationWarning>
       <div className="relative w-full max-w-[850px] min-h-[550px] bg-white rounded-[20px] shadow-2xl overflow-hidden flex flex-col md:flex-row">
-        
+
         {/* Sign In Form Container */}
         <div className={`absolute top-0 left-0 h-full w-full md:w-1/2 transition-all duration-700 ease-in-out z-20 ${isSignUp ? "md:translate-x-full opacity-0 pointer-events-none" : "opacity-100"}`}>
           <FormContainer title={isForgotPassword ? "Reset Password" : "Sign In"} description={isForgotPassword ? "Masukkan email Anda" : "Akses brankas sertifikat digital Anda yang telah diamankan."}>
@@ -112,20 +118,20 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
                   )}
                   <div className="grid gap-2 text-left">
                     <Label htmlFor="signin-email">Email</Label>
-                    <Input 
-                      id="signin-email" 
-                      type="email" 
-                      placeholder="m@example.com" 
+                    <Input
+                      id="signin-email"
+                      type="email"
+                      placeholder="m@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
                   <div className="grid gap-2 text-left">
                     <Label htmlFor="signin-password">Password</Label>
-                    <Input 
-                      id="signin-password" 
-                      type="password" 
-                      placeholder="••••••••" 
+                    <Input
+                      id="signin-password"
+                      type="password"
+                      placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                     />
@@ -170,7 +176,7 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
 
         {/* Sign Up Form Container */}
         <div className={`absolute top-0 left-0 h-full w-full md:w-1/2 transition-all duration-700 ease-in-out z-10 ${isSignUp ? "md:translate-x-full opacity-100 z-30" : "opacity-0 z-10"}`}>
-           <FormContainer title="Create Account" description="Daftarkan identitas Anda untuk memulai transaksi properti dengan enkripsi end-to-end.">
+          <FormContainer title="Create Account" description="Daftarkan identitas Anda untuk memulai transaksi properti dengan enkripsi end-to-end.">
             <form className="flex flex-col gap-4 w-full max-w-xs mx-auto" onSubmit={handleSignUp}>
               {message && isSignUp && (
                 <div className={`text-xs p-2 rounded ${message.type === "success" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
@@ -179,30 +185,30 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
               )}
               <div className="grid gap-2 text-left">
                 <Label htmlFor="signup-name">Name</Label>
-                <Input 
-                  id="signup-name" 
-                  type="text" 
-                  placeholder="John Doe" 
+                <Input
+                  id="signup-name"
+                  type="text"
+                  placeholder="John Doe"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
               </div>
               <div className="grid gap-2 text-left">
                 <Label htmlFor="signup-email">Email</Label>
-                <Input 
-                  id="signup-email" 
-                  type="email" 
-                  placeholder="m@example.com" 
+                <Input
+                  id="signup-email"
+                  type="email"
+                  placeholder="m@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
               <div className="grid gap-2 text-left">
                 <Label htmlFor="signup-password">Password</Label>
-                <Input 
-                  id="signup-password" 
-                  type="password" 
-                  placeholder="••••••••" 
+                <Input
+                  id="signup-password"
+                  type="password"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -215,27 +221,27 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
         {/* Overlay Container */}
         <div className={`absolute top-0 left-1/2 w-full md:w-1/2 h-full overflow-hidden transition-transform duration-700 ease-in-out z-40 hidden md:block ${isSignUp ? "-translate-x-full" : ""}`}>
           <div className={`bg-gradient-to-br from-zinc-800 to-zinc-950 text-white relative -left-full h-full w-[200%] transform transition-transform duration-700 ease-in-out ${isSignUp ? "translate-x-1/2" : "translate-x-0"}`}>
-            
+
             {/* Overlay Left (Visible when Sign Up is active, shows "Sign In" prompt) */}
-             <div className={`absolute top-0 flex flex-col items-center justify-center h-full w-1/2 transform transition-transform duration-700 ease-in-out ${isSignUp ? "translate-x-0" : "-translate-x-[20%]"}`}>
-               <div className="max-w-xs text-center px-8">
-                  <h1 className="text-3xl font-bold mb-4">Sudah Terdaftar?</h1>
-                  <p className="mb-8 text-zinc-300">Kembali kelola aset dan pantau validitas sertifikat Anda melalui dasbor yang aman.</p>
-                  <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-900 w-32 rounded-full bg-transparent" onClick={toggleMode}>
-                    Sign In
-                  </Button>
-               </div>
+            <div className={`absolute top-0 flex flex-col items-center justify-center h-full w-1/2 transform transition-transform duration-700 ease-in-out ${isSignUp ? "translate-x-0" : "-translate-x-[20%]"}`}>
+              <div className="max-w-xs text-center px-8">
+                <h1 className="text-3xl font-bold mb-4">Sudah Terdaftar?</h1>
+                <p className="mb-8 text-zinc-300">Kembali kelola aset dan pantau validitas sertifikat Anda melalui dasbor yang aman.</p>
+                <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-900 w-32 rounded-full bg-transparent" onClick={toggleMode}>
+                  Sign In
+                </Button>
+              </div>
             </div>
 
             {/* Overlay Right (Visible when Sign In is active, shows "Sign Up" prompt) */}
             <div className={`absolute top-0 right-0 flex flex-col items-center justify-center h-full w-1/2 transform transition-transform duration-700 ease-in-out ${isSignUp ? "translate-x-[20%]" : "translate-x-0"}`}>
-               <div className="max-w-xs text-center px-8">
-                  <h1 className="text-3xl font-bold mb-4">Belum Punya Akun?</h1>
-                  <p className="mb-8 text-zinc-300">Mulai proteksi aset tanah Anda dengan teknologi steganografi tak kasat mata.</p>
-                  <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-900 w-32 rounded-full bg-transparent" onClick={toggleMode}>
-                    Sign Up
-                  </Button>
-               </div>
+              <div className="max-w-xs text-center px-8">
+                <h1 className="text-3xl font-bold mb-4">Belum Punya Akun?</h1>
+                <p className="mb-8 text-zinc-300">Mulai proteksi aset tanah Anda dengan teknologi steganografi tak kasat mata.</p>
+                <Button variant="outline" className="border-white text-white hover:bg-white hover:text-zinc-900 w-32 rounded-full bg-transparent" onClick={toggleMode}>
+                  Sign Up
+                </Button>
+              </div>
             </div>
 
           </div>
@@ -243,9 +249,9 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
 
         {/* Mobile Toggle (Visible only on small screens) */}
         <div className="md:hidden absolute bottom-4 left-0 w-full flex justify-center z-50">
-             <Button variant="ghost" onClick={toggleMode} className="text-zinc-500 hover:text-zinc-900">
-                {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
-             </Button>
+          <Button variant="ghost" onClick={toggleMode} className="text-zinc-500 hover:text-zinc-900">
+            {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Sign Up"}
+          </Button>
         </div>
 
       </div>
@@ -262,5 +268,3 @@ function FormContainer({ children, title, description }: { children: React.React
     </div>
   );
 }
-
-
