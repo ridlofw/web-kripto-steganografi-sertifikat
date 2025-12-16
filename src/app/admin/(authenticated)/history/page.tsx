@@ -69,6 +69,21 @@ const historyData: HistoryItem[] = [
 
 export const columns: ColumnDef<HistoryItem>[] = [
     {
+        accessorKey: "date",
+        header: ({ column }) => {
+            return (
+                <Button
+                    variant="ghost"
+                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                >
+                    Tanggal
+                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+            );
+        },
+        cell: ({ row }) => <span className="opacity-70 text-sm">{row.getValue("date")}</span>,
+    },
+    {
         accessorKey: "id",
         header: ({ column }) => {
             return (
@@ -130,21 +145,7 @@ export const columns: ColumnDef<HistoryItem>[] = [
         header: "Jenis",
         cell: ({ row }) => <Badge variant="outline" className="font-normal">{row.getValue("type")}</Badge>,
     },
-    {
-        accessorKey: "date",
-        header: ({ column }) => {
-            return (
-                <Button
-                    variant="ghost"
-                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                >
-                    Tanggal
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-            );
-        },
-        cell: ({ row }) => <span className="opacity-70 text-sm">{row.getValue("date")}</span>,
-    },
+
     {
         accessorKey: "status",
         header: "Status",
