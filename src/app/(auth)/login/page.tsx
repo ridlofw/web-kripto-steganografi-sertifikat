@@ -73,17 +73,24 @@ export default function AuthPage({ initialSignUp = false }: { initialSignUp?: bo
     }
 
     try {
+      // Hardcoded check for requested dummy user
+      const isDummyUser = email === "user@terafy.com" && password === "user";
+
       const users = JSON.parse(localStorage.getItem("auth_users") || "[]");
       const user = users.find((u: User) => u.email === email && u.password === password);
 
-      if (user) {
-        localStorage.setItem("auth_session", JSON.stringify(user));
+      if (user || isDummyUser) {
+        const sessionUser = user || { name: "User Terafy", email: "user@terafy.com" };
+
+        localStorage.setItem("auth_session", JSON.stringify(sessionUser));
+        document.cookie = "user_session=true; path=/"; // Set cookie for middleware
+
         // Dispatch custom event for Navbar update
         window.dispatchEvent(new Event("auth-change"));
 
         setMessage({ type: "success", text: "Login successful! Redirecting..." });
         setTimeout(() => {
-          router.push("/dashboard");
+          router.push("/");
         }, 1000);
       } else {
         setMessage({ type: "error", text: "Invalid email or password" });
