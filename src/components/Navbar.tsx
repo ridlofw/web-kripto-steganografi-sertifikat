@@ -47,10 +47,11 @@ export function Navbar() {
 
     const handleLogout = () => {
         localStorage.removeItem("auth_session");
+        document.cookie = "user_session=; path=/; max-age=0"; // Clear cookie
         setUser(null);
         window.dispatchEvent(new Event("auth-change"));
         router.push("/login");
-        router.refresh();
+        router.refresh(); // Force refresh to trigger middleware
     };
 
     const getInitials = (name: string) => {
@@ -85,26 +86,26 @@ export function Navbar() {
         {
             id: '1',
             status: 'incoming',
-            title: 'Sertifikat Menunggu Verifikasi',
-            message: 'Permintaan sertifikat baru #S-001 perlu ditinjau.',
+            title: 'Menunggu Konfirmasi',
+            message: 'Budi Santoso mengajukan transfer',
             timestamp: new Date(new Date().getTime() - 1000 * 60 * 30), // 30 mins ago
-            detailLink: '/sertifikat/detail/1'
+            detailLink: '/sertifikat/detail/TRX-002' // Updated: Link to t2 (Hibah)
         },
         {
             id: '2',
             status: 'accepted',
-            title: 'Sertifikat Terverifikasi',
-            message: 'Sertifikat #S-002 telah disetujui.',
+            title: 'Verifikasi Admin',
+            message: 'Admin menyetujui perpindahan hak',
             timestamp: new Date(new Date().getTime() - 1000 * 60 * 60 * 24), // 1 day ago
-            detailLink: '/sertifikat/detail/2'
+            detailLink: '/sertifikat/detail/TRX-001' // Updated: Link to t1 (Jual Beli)
         },
         {
             id: '3',
             status: 'rejected',
-            title: 'Sertifikat Ditolak',
-            message: 'Dokumen #S-003 tidak valid.',
+            title: 'Ditolak',
+            message: 'Dokumen pendukung kurang lengkap',
             timestamp: new Date(new Date().getTime() - 1000 * 60 * 60 * 48), // 2 days ago
-            detailLink: '/sertifikat/detail/3'
+            detailLink: '/sertifikat/detail/TRX-003' // Updated: Link to t3 (Rejected)
         }
     ]);
 
@@ -113,8 +114,8 @@ export function Navbar() {
             n.id === id ? {
                 ...n,
                 status: 'pending' as NotificationStatus,
-                title: 'Menunggu Finalisasi',
-                message: 'Verifikasi awal berhasil. Menunggu persetujuan admin pusat.'
+                title: 'Menunggu Verifikasi Admin',
+                message: 'Menunggu verifikasi admin BPN'
             } : n
         ));
     };
@@ -124,8 +125,8 @@ export function Navbar() {
             n.id === id ? {
                 ...n,
                 status: 'rejected' as NotificationStatus,
-                title: 'Permintaan Ditolak',
-                message: 'Anda telah menolak permintaan sertifikat ini.'
+                title: 'Ditolak',
+                message: 'Anda menolak pengajuan ini'
             } : n
         ));
     };
@@ -203,9 +204,9 @@ export function Navbar() {
                                                         {notification.status === 'accepted' && <CheckCircle2 className="h-4 w-4" />}
                                                         {notification.status === 'rejected' && <XCircle className="h-4 w-4" />}
                                                         <span className="text-sm font-semibold capitalize">
-                                                            {notification.status === 'incoming' ? 'Konfirmasi Diperlukan' :
-                                                                notification.status === 'pending' ? 'Menunggu Admin' :
-                                                                    notification.status === 'accepted' ? 'Diterima' : 'Ditolak'}
+                                                            {notification.status === 'incoming' ? 'Menunggu Konfirmasi' :
+                                                                notification.status === 'pending' ? 'Menunggu Verifikasi Admin' :
+                                                                    notification.status === 'accepted' ? 'Verifikasi Admin' : 'Ditolak'}
                                                         </span>
                                                     </div>
                                                 </div>

@@ -8,41 +8,83 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
-import { CheckCircle, Settings, Upload, FileText } from "lucide-react";
-import { useRef, useState } from "react";
+import { CheckCircle, Settings, Upload, FileText, ZoomIn, X } from "lucide-react";
+import Image from "next/image";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { useRef, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-const dummyCertificates = [
-    {
-        id: "ctf-01",
-        title: "Sertifikat Tanah",
-        subtitle: "Tanah di Desa",
-        address: "Indraprasta, Semarang",
-        luas: "100 m2",
-        tanggal: "11 Februari 2006",
-    },
-    {
-        id: "ctf-02",
-        title: "Sertifikat Sawah",
-        subtitle: "Sawah Bapak",
-        address: "DR. Cipto, Semarang",
-        luas: "1000 m2",
-        tanggal: "11 Februari 2006",
-    },
-];
+import { DUMMY_CERTIFICATES } from "@/lib/dummy-data";
+
+// Map dummy data to the shape expected by this view
+const MAPPED_INITIAL_CERTIFICATES = DUMMY_CERTIFICATES.map(c => ({
+    id: c.id,
+    title: c.nama,
+    subtitle: c.keterangan,
+    address: c.location,
+    luas: c.luas,
+    tanggal: c.uploadDate, // Or format it if needed
+}));
 
 export default function Home() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
+    const [certificates, setCertificates] = useState(MAPPED_INITIAL_CERTIFICATES);
+    const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [imageZoomOpen, setImageZoomOpen] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+
+    // Form State
+    const [formData, setFormData] = useState({
+        namaSertifikat: "",
+        nomorSertifikat: "",
+        namaPemegang: "",
+        luasTanah: "",
+        alamat: "",
+        keterangan: ""
+    });
+
+    useEffect(() => {
+        const session = localStorage.getItem("auth_session");
+        if (session) {
+            const user = JSON.parse(session);
+            setCurrentUser(user);
+            setFormData(prev => ({ ...prev, namaPemegang: user.name || "" }));
+        }
+    }, []);
 
     const handleUploadClick = () => {
         fileInputRef.current?.click();
     };
 
+    const processFile = (file: File) => {
+        console.log("File selected:", file);
+        setUploadedFile(file);
+
+        // Create object URL for preview
+        const objectUrl = URL.createObjectURL(file);
+        setPreviewUrl(objectUrl);
+
+        setIsUploadOpen(true);
+    };
+
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            console.log("File selected:", file);
-            // Handle file upload logic here
+            processFile(file);
         }
     };
 
@@ -60,9 +102,39 @@ export default function Home() {
         setIsDragging(false);
         const file = event.dataTransfer.files?.[0];
         if (file) {
-            console.log("File dropped:", file);
-            // Handle file upload logic here
+            processFile(file);
         }
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const newCert = {
+            id: `ctf-${certificates.length + 1}`.padEnd(6, '0'), // Simple ID gen
+            title: formData.namaSertifikat,
+            subtitle: formData.keterangan || "Sertifikat Baru",
+            address: formData.alamat,
+            luas: `${formData.luasTanah} m2`,
+            tanggal: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }),
+            // Internal data structure would actually be more complex like dummy-data.ts
+            // but for this view model we match simple structure
+        };
+
+        setCertificates([newCert, ...certificates]);
+        setCertificates([newCert, ...certificates]);
+        setIsUploadOpen(false);
+        setUploadedFile(null);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+        // Reset form but keep owner name
+        setFormData({
+            namaSertifikat: "",
+            nomorSertifikat: "",
+            namaPemegang: currentUser?.name || "",
+            luasTanah: "",
+            alamat: "",
+            keterangan: ""
+        });
     };
 
     return (
@@ -131,7 +203,7 @@ export default function Home() {
                     </h2>
 
                     <div className="mt-6 grid gap-6 md:grid-cols-2">
-                        {dummyCertificates.map((c) => (
+                        {certificates.map((c) => (
                             <Link key={c.id} href={`/sertifikat/${c.id}`}>
                                 <Card className="group h-full cursor-pointer border-zinc-200 transition-all hover:border-zinc-400 hover:shadow-md">
                                     <CardHeader>
@@ -164,6 +236,165 @@ export default function Home() {
                     </div>
                 </section>
             </div>
-        </div>
+            {/* Upload Dialog */}
+            <Dialog
+                open={isUploadOpen}
+                onOpenChange={(open) => {
+                    // Prevent closing the dialog if the zoom modal is open
+                    if (!open && imageZoomOpen) return;
+                    setIsUploadOpen(open);
+                }}
+            >
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Detail Sertifikat Baru</DialogTitle>
+                        <DialogDescription>
+                            Lengkapi informasi sertifikat untuk dokumen yang baru saja diunggah.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {previewUrl && (
+                        <div className="mb-6 space-y-3">
+                            <div
+                                className="relative aspect-video w-full cursor-zoom-in overflow-hidden rounded-lg border bg-zinc-100 dark:bg-zinc-800"
+                                onClick={() => setImageZoomOpen(true)}
+                            >
+                                <Image
+                                    src={previewUrl}
+                                    alt="Preview Sertifikat"
+                                    fill
+                                    className="object-cover transition-transform hover:scale-105"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/20">
+                                    <div className="flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-white">
+                                        <ZoomIn className="h-4 w-4" />
+                                        <span className="text-xs font-medium">Perbesar</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {uploadedFile && (
+                                <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded bg-blue-100 text-blue-600">
+                                        <FileText className="h-5 w-5" />
+                                    </div>
+                                    <div className="overflow-hidden">
+                                        <p className="truncate text-sm font-medium">{uploadedFile.name}</p>
+                                        <p className="text-xs text-muted-foreground">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="no-sertif">Nomor Sertifikat</Label>
+                                <Input
+                                    id="no-sertif"
+                                    placeholder="XXX/SRTV/X/YYYY"
+                                    required
+                                    value={formData.nomorSertifikat}
+                                    onChange={(e) => setFormData({ ...formData, nomorSertifikat: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="nama-sertif">Nama Sertifikat</Label>
+                                <Input
+                                    id="nama-sertif"
+                                    placeholder="Contoh: Tanah Warisan"
+                                    required
+                                    value={formData.namaSertifikat}
+                                    onChange={(e) => setFormData({ ...formData, namaSertifikat: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="pemegang">Nama Pemegang Hak</Label>
+                            <Input
+                                id="pemegang"
+                                placeholder="Nama Lengkap"
+                                required
+                                value={formData.namaPemegang}
+                                onChange={(e) => setFormData({ ...formData, namaPemegang: e.target.value })}
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="luas">Luas Tanah</Label>
+                                <div className="relative">
+                                    <Input
+                                        id="luas"
+                                        type="number"
+                                        placeholder="500"
+                                        required
+                                        min="1"
+                                        value={formData.luasTanah}
+                                        onChange={(e) => setFormData({ ...formData, luasTanah: e.target.value })}
+                                        className="pr-12"
+                                    />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground bg-white pl-1">
+                                        m²
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="alamat">Alamat Lokasi</Label>
+                                <Input
+                                    id="alamat"
+                                    placeholder="Jalan..."
+                                    required
+                                    value={formData.alamat}
+                                    onChange={(e) => setFormData({ ...formData, alamat: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="keterangan">Keterangan</Label>
+                            <Textarea
+                                id="keterangan"
+                                placeholder="Deskripsi tambahan..."
+                                value={formData.keterangan}
+                                onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+                            />
+                        </div>
+
+                        <DialogFooter className="mt-4">
+                            <Button type="button" variant="outline" onClick={() => setIsUploadOpen(false)}>Batal</Button>
+                            <Button type="submit">Simpan Sertifikat</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog >
+            {/* Image Zoom Modal */}
+            <Dialog open={imageZoomOpen} onOpenChange={setImageZoomOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-[95vw] w-auto h-auto border-none bg-transparent shadow-none p-0 flex items-center justify-center outline-none">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Preview Images</DialogTitle>
+                    </DialogHeader>
+                    {previewUrl && (
+                        <div className="relative flex items-center justify-center outline-none">
+                            <button
+                                onClick={() => setImageZoomOpen(false)}
+                                className="absolute -right-4 -top-4 z-50 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                            <Image
+                                src={previewUrl}
+                                alt="Full Preview"
+                                width={1200}
+                                height={800}
+                                className="max-h-[85vh] w-auto rounded-md object-contain"
+                            />
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </div >
     );
 }
