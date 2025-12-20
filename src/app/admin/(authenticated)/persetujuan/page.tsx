@@ -18,51 +18,51 @@ type Approval = {
     status: string;
 };
 
-// Dummy data
+// Dummy data (Hardcoded as requested to not sync yet)
 const approvals: Approval[] = [
     {
         id: "TRX-001",
-        certNo: "SERT-2024-001",
+        certNo: "111/SRTV/X/2024",
         sender: "Budi Santoso",
         receiver: "Ahmad Dahlan",
         type: "Jual Beli",
-        date: "2024-12-10",
+        date: "2024-12-10 13:45:00",
         status: "Pending",
     },
     {
         id: "TRX-002",
-        certNo: "SERT-2024-089",
+        certNo: "112/SRTV/X/2024",
         sender: "Siti Aminah",
         receiver: "Yayasan Wakaf",
         type: "Wakaf",
-        date: "2024-12-09",
+        date: "2024-12-09 10:30:00",
         status: "Pending",
     },
     {
         id: "TRX-003",
-        certNo: "SERT-2024-156",
+        certNo: "113/SRTV/X/2024",
         sender: "Joko Widodo",
         receiver: "Ma'ruf Amin",
         type: "Hibah",
-        date: "2024-12-08",
+        date: "2024-12-08 15:20:00",
         status: "Pending",
     },
     {
         id: "TRX-004",
-        certNo: "SERT-2024-201",
+        certNo: "114/SRTV/X/2024",
         sender: "Rina Nose",
         receiver: "Andre Taulany",
         type: "Jual Beli",
-        date: "2024-12-07",
+        date: "2024-12-07 09:00:00",
         status: "Pending",
     },
     {
         id: "TRX-005",
-        certNo: "SERT-2024-202",
+        certNo: "115/SRTV/X/2024",
         sender: "Sule",
         receiver: "Rizwan",
-        type: "Warisan",
-        date: "2024-12-06",
+        type: "Hibah",
+        date: "2024-12-06 14:15:00",
         status: "Pending",
     },
 ];
