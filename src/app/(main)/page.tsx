@@ -8,7 +8,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import Link from "next/link";
-import { CheckCircle, Settings, Upload, FileText, ZoomIn, X } from "lucide-react";
+import { CheckCircle, Settings, Upload, FileText, ZoomIn, X, ChevronRight } from "lucide-react";
 import Image from "next/image";
 import {
     Dialog,
@@ -198,12 +198,19 @@ export default function Home() {
 
                 {/* certificate list */}
                 <section className="mt-12">
-                    <h2 className="text-2xl font-semibold text-zinc-800">
-                        Daftar Sertifikat Anda
-                    </h2>
+                    <div className="flex items-center justify-between mb-6">
+                        <h2 className="text-2xl font-semibold text-zinc-800">
+                            Sertifikat Terbaru
+                        </h2>
+                        <Link href="/sertifikat">
+                            <Button variant="ghost" className="text-zinc-500 hover:text-zinc-900">
+                                Lihat Semua <ChevronRight className="ml-1 h-4 w-4" />
+                            </Button>
+                        </Link>
+                    </div>
 
-                    <div className="mt-6 grid gap-6 md:grid-cols-2">
-                        {certificates.map((c) => (
+                    <div className="grid gap-6 md:grid-cols-2">
+                        {certificates.slice(0, 4).map((c) => (
                             <Link key={c.id} href={`/sertifikat/${c.id}`}>
                                 <Card className="group h-full cursor-pointer border-zinc-200 transition-all hover:border-zinc-400 hover:shadow-md">
                                     <CardHeader>
