@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
     ArrowLeft,
     Search,
-    filter,
     ChevronLeft,
     ChevronRight,
     LayoutGrid,
