@@ -52,18 +52,22 @@ export async function loginUser(formData: any) {
         })
 
         if (!user) {
+            console.log("[LOGIN FAIL] User not found for email:", email);
             return { error: "Email atau password salah" }
         }
+        console.log("[LOGIN DEBUG] User found:", user.email, "Role:", user.role, "Hash:", user.password);
 
         // Check password (bcrypt)
-        // For dummy seed user, password might be plain text 'password123' if not hashed in seed.ts
-        // In seed.ts I didn't hash them yet. I should update seed.ts later or handle it here.
-        const isMatch = await bcrypt.compare(password, user.password).catch(() => false)
-
-        // Fallback for plain text if bcrypt fails (only for dev/dummy transition)
+        const isMatch = await bcrypt.compare(password, user.password).catch((err) => {
+            console.error("[LOGIN ERROR] Bcrypt compare error:", err);
+            return false;
+        })
         const isPlainMatch = password === user.password
 
+        console.log("[LOGIN DEBUG] Password check - Bcrypt:", isMatch, "Plain:", isPlainMatch);
+
         if (!isMatch && !isPlainMatch) {
+            console.log("[LOGIN FAIL] Password mismatch");
             return { error: "Email atau password salah" }
         }
 
@@ -93,4 +97,17 @@ export async function logoutUser() {
     const cookieStore = await cookies()
     cookieStore.delete("user_session")
     return { success: true }
+}
+
+export async function getSession() {
+    const cookieStore = await cookies()
+    const sessionCookie = cookieStore.get("user_session")
+    if (sessionCookie?.value) {
+        try {
+            return JSON.parse(sessionCookie.value)
+        } catch (e) {
+            return null
+        }
+    }
+    return null
 }

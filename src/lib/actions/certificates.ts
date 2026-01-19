@@ -3,12 +3,13 @@
 import prisma from "@/lib/prisma"
 import { cookies } from "next/headers"
 import * as crypto from "crypto"
-import { writeFile, mkdir, unlink } from "fs/promises"
+import { writeFile, mkdir, unlink, readFile } from "fs/promises"
 import path from "path"
 import { Steganography } from "@/lib/steganography"
 import { exec } from "child_process"
 import util from "util"
 import { revalidatePath } from "next/cache"
+import { supabase } from "@/lib/supabase"
 const execAsync = util.promisify(exec)
 
 export async function getUserCertificates() {
@@ -23,20 +24,43 @@ export async function getUserCertificates() {
         const session = JSON.parse(sessionValue)
         const userId = session.id
 
-        console.log(`[QUERY] Fetching user certificates for ${userId} via RAW SQL...`)
+        console.log(`[DEBUG_CERT] Fetching certificates for UserID: ${userId}`)
+        
+        // Debug: Check table columns
+        try {
+             const columns = await prisma.$queryRawUnsafe(`
+                SELECT column_name::text 
+                FROM information_schema.columns 
+                WHERE table_name = 'certificates'
+             `) as any[];
+             console.log("[DEBUG_CERT] Table 'certificates' columns:", columns.map((c:any) => c.column_name).join(', '));
+        } catch (e) {
+            console.error("[DEBUG_CERT] Failed to inspect columns:", e);
+        }
+
         const certificates = await prisma.$queryRawUnsafe(
-            `SELECT * FROM "Certificate" 
-             WHERE "ownerId" = $1 
+            `SELECT * FROM "certificates" 
+             WHERE "owner_id" = $1 
              AND "nomor_sertifikat" NOT LIKE '%_REJECTED_%' 
              AND "nomor_sertifikat" NOT LIKE '%_PENDING_OVERWRITE_%'
-             ORDER BY "createdAt" DESC`,
+             ORDER BY "created_at" DESC`,
             userId
         ) as any[]
+        
+        console.log(`[DEBUG_CERT] Found ${certificates.length} certificates.`);
 
-        return { success: true, certificates }
-    } catch (error) {
-        console.error("Fetch certificates error:", error)
-        return { error: "Gagal mengambil data sertifikat" }
+        const mappedCertificates = certificates.map((c: any) => ({
+            ...c,
+            createdAt: c.created_at,
+            updatedAt: c.updated_at,
+            issueDate: c.issue_date,
+            ownerId: c.owner_id
+        }));
+
+        return { success: true, certificates: mappedCertificates }
+    } catch (error: any) {
+        console.error("[DEBUG_CERT] Fetch error details:", error)
+        return { error: "Gagal mengambil data sertifikat: " + error.message }
     }
 }
 
@@ -77,43 +101,28 @@ export async function createCertificate(formData: any) {
         const inputNomor = (formData.get("nomorSertifikat") as string || "").trim();
         console.log(`[CREATE] Checking for duplicate: '${inputNomor}'`);
 
+        // Check for VERIFIED duplicate only
+        // We now allow multiple PENDING requests for the same number (to handle disputes)
         const existingCert = await prisma.certificate.findFirst({
             where: {
-                nomor_sertifikat: inputNomor
+                nomor_sertifikat: inputNomor,
+                status: 'VERIFIED'
             }
         });
 
         if (existingCert) {
-            // Check status
-            // Check status: Allow overwrite if REJECTED or PENDING
-            if (existingCert.status === 'REJECTED' || existingCert.status === 'PENDING') {
-                console.log(`[CREATE] Found ${existingCert.status} duplicate for '${inputNomor}'. Archiving old cert...`);
-
-                // Archive the old cert by renaming its number
-                // This frees up the unique slot for the new upload
-                const suffix = existingCert.status === 'REJECTED' ? 'REJECTED' : 'PENDING_OVERWRITE';
-                const archivedNumber = `${inputNomor}_${suffix}_${Date.now()}`;
-
-                await prisma.certificate.update({
-                    where: { id: existingCert.id },
-                    data: {
-                        nomor_sertifikat: archivedNumber,
-                        keterangan: (existingCert.keterangan || "") + ` [ARCHIVED ${existingCert.status} DUPLICATE]`
-                    }
-                });
-                console.log(`[CREATE] Archived old cert ${existingCert.id} to ${archivedNumber}`);
-            } else {
-                console.warn(`[CREATE] Duplicate found for: '${inputNomor}' with status ${existingCert.status}`);
-                return { error: "DUPLICATE_NUMBER", message: "Nomor sertifikat sudah terdaftar dalam sistem." };
-            }
+            console.warn(`[CREATE] Verified duplicate found for: '${inputNomor}'`);
+            return { error: "DUPLICATE_NUMBER", message: "Nomor sertifikat ini sudah terdaftar dan TERVERIFIKASI milik orang lain." };
         }
+        
+        console.log(`[CREATE] No verified certificate found for '${inputNomor}'. Proceeding...`);
 
         // Create certificate via RAW SQL to avoid Enum errors
         const newId = crypto.randomUUID();
         const rows = await prisma.$queryRawUnsafe(`
-            INSERT INTO "Certificate" (
+            INSERT INTO "certificates" (
                 id, nomor_sertifikat, nama_lahan, luas_tanah, lokasi, keterangan, 
-                "ownerId", status, "issueDate", image_url, "createdAt", "updatedAt"
+                "owner_id", status, "issue_date", image_url, "created_at", "updated_at"
             ) VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
             ) RETURNING *
@@ -191,8 +200,8 @@ export async function requestTransfer(certId: string, targetEmail: string) {
         console.log(`[TRANSFER] Fetching certificate ${certId} via RAW SQL...`)
         const certificates = await prisma.$queryRawUnsafe(
             `SELECT c.*, u.email as "ownerEmail", u.name as "ownerName" 
-             FROM "Certificate" c 
-             JOIN "User" u ON c."ownerId" = u.id 
+             FROM "certificates" c 
+             JOIN "users" u ON c."owner_id" = u.id 
              WHERE c.id = $1 LIMIT 1`,
             certId
         ) as any[]
@@ -235,7 +244,7 @@ export async function requestTransfer(certId: string, targetEmail: string) {
         // 3. Update status to AWAITING_RECIPIENT using RAW SQL to bypass Prisma Client sync issues
         console.log("[TRANSFER] Updating certificate status via RAW SQL...")
         await prisma.$executeRawUnsafe(
-            `UPDATE "Certificate" SET status = 'AWAITING_RECIPIENT', "transferToEmail" = $1 WHERE id = $2`,
+            `UPDATE "certificates" SET status = 'AWAITING_RECIPIENT', "transferToEmail" = $1 WHERE id = $2`,
             targetEmail,
             certId
         )
@@ -273,7 +282,7 @@ export async function acceptTransfer(certId: string) {
 
         // 1. Fetch cert and check if session email matches transferToEmail
         const certs = await prisma.$queryRawUnsafe(
-            `SELECT * FROM "Certificate" WHERE id = $1 LIMIT 1`,
+            `SELECT * FROM "certificates" WHERE id = $1 LIMIT 1`,
             certId
         ) as any[]
 
@@ -286,7 +295,7 @@ export async function acceptTransfer(certId: string) {
 
         // 2. Update status to TRANSFER_PENDING (Now it goes to Admin)
         await prisma.$executeRawUnsafe(
-            `UPDATE "Certificate" SET status = 'TRANSFER_PENDING' WHERE id = $1`,
+            `UPDATE "certificates" SET status = 'TRANSFER_PENDING' WHERE id = $1`,
             certId
         )
 
@@ -322,7 +331,7 @@ export async function rejectTransfer(certId: string) {
 
         // 1. Reset status back to VERIFIED and clear transferToEmail
         await prisma.$executeRawUnsafe(
-            `UPDATE "Certificate" SET status = 'VERIFIED', "transferToEmail" = NULL WHERE id = $1 AND "transferToEmail" = $2`,
+            `UPDATE "certificates" SET status = 'VERIFIED', "transferToEmail" = NULL WHERE id = $1 AND "transferToEmail" = $2`,
             certId,
             session.email
         )
@@ -358,7 +367,7 @@ export async function rejectTransfer(certId: string) {
 
         // 4. Notify Owner (We need owner ID)
         const certData = await prisma.$queryRawUnsafe(
-            `SELECT "ownerId", nama_lahan FROM "Certificate" WHERE id = $1`, certId
+            `SELECT "owner_id", nama_lahan FROM "certificates" WHERE id = $1`, certId
         ) as any[]
 
         if (certData && certData[0]) {
@@ -387,17 +396,41 @@ export async function getAllCertificates() {
         console.log("[QUERY] Fetching all certificates via RAW SQL...")
         const certs = await prisma.$queryRawUnsafe(
             `SELECT c.*, u.name as "ownerName", u.email as "ownerEmail" 
-             FROM "Certificate" c 
-             JOIN "User" u ON c."ownerId" = u.id 
+             FROM "certificates" c 
+             JOIN "users" u ON c."owner_id" = u.id 
              WHERE c."nomor_sertifikat" NOT LIKE '%_REJECTED_%' 
              AND c."nomor_sertifikat" NOT LIKE '%_PENDING_OVERWRITE_%'
-             ORDER BY c."createdAt" DESC`
+             ORDER BY c."created_at" DESC`
         ) as any[]
+
+        // 1. Fetch Conflict Counts (Duplicates)
+        const conflicts = await prisma.$queryRawUnsafe(
+            `SELECT "nomor_sertifikat", COUNT(*)::int as count 
+             FROM "certificates" 
+             GROUP BY "nomor_sertifikat" 
+             HAVING COUNT(*) > 1`
+        ) as any[]
+        
+        const conflictMap = new Map<string, number>();
+        conflicts.forEach((c: any) => {
+            conflictMap.set(c.nomor_sertifikat, c.count);
+        });
 
         const certificates = certs.map((c: any) => ({
             ...c,
+            // Map snake_case to camelCase
+            createdAt: c.created_at,
+            updatedAt: c.updated_at,
+            issueDate: c.issue_date,
+            ownerId: c.owner_id,
+            verifiedAt: c.verified_at,
+            rejectedAt: c.rejected_at,
+            
+            // Conflict Flag
+            duplicateCount: conflictMap.get(c.nomor_sertifikat) || 0,
+
             owner: {
-                id: c.ownerId,
+                id: c.owner_id, // Fixed mapping
                 name: c.ownerName || c.ownerEmail || "User",
                 email: c.ownerEmail
             }
@@ -447,7 +480,7 @@ export async function getAdminStats() {
 
         // Fetch TRANSFER counts via raw SQL (including AWAITING_RECIPIENT and TRANSFER_PENDING)
         const transferCountRaw = await prisma.$queryRawUnsafe(
-            `SELECT count(*)::int as count FROM "Certificate" 
+            `SELECT count(*)::int as count FROM "certificates" 
              WHERE status IN ('TRANSFER_PENDING', 'AWAITING_RECIPIENT')
              AND "nomor_sertifikat" NOT LIKE '%_REJECTED_%' 
              AND "nomor_sertifikat" NOT LIKE '%_PENDING_OVERWRITE_%'`
@@ -471,7 +504,7 @@ export async function getAdminStats() {
 
         // Fetch total successful transfers from history
         const transfersCountRaw = await prisma.$queryRawUnsafe(
-            `SELECT count(*)::int as count FROM "History" WHERE action = 'Pengalihan Hak'`
+            `SELECT count(*)::int as count FROM "histories" WHERE action = 'Pengalihan Hak'`
         ) as any[]
         const approvedTransfersCount = transfersCountRaw[0].count;
 
@@ -532,10 +565,11 @@ export async function updateCertificateStatus(id: string, status: "VERIFIED" | "
         console.log(`[ACTION] Admin verified in DB: ${adminInDb.email}`)
 
         // Check current status and metadata via RAW SQL to avoid Enum errors
+        // Check current status and metadata via RAW SQL to avoid Enum errors
         const certs = await prisma.$queryRawUnsafe(
-            `SELECT c.*, m.id as "metaId", m."stegoImage", m.algorithm as "metaAlgo" 
-             FROM "Certificate" c 
-             LEFT JOIN "SteganographyMetadata" m ON c.id = m."certificateId" 
+            `SELECT c.*, m.id as "metaId", m."stego_image" as "stegoImage", m.algorithm as "metaAlgo" 
+             FROM "certificates" c 
+             LEFT JOIN "steganography_metadata" m ON c.id = m."certificate_id" 
              WHERE c.id = $1 LIMIT 1`,
             id
         ) as any[]
@@ -697,14 +731,14 @@ export async function updateCertificateStatus(id: string, status: "VERIFIED" | "
 
                     // 1. Fetch History for Payload (Now includes the action we just created)
                     const historyRows = await prisma.$queryRawUnsafe(
-                        `SELECT actor_name, action, "createdAt", owner_name FROM "History" WHERE "certificateId" = $1 ORDER BY "createdAt" ASC`,
+                        `SELECT actor_name, action, "created_at", owner_name FROM "histories" WHERE "certificate_id" = $1 ORDER BY "created_at" ASC`,
                         id
                     ) as any[];
 
                     const historySummary = historyRows.map(h => ({
                         a: h.action,
                         o: h.owner_name,
-                        d: h.createdAt
+                        d: h.created_at
                     }));
 
                     const payload = {
@@ -740,33 +774,66 @@ export async function updateCertificateStatus(id: string, status: "VERIFIED" | "
                     const securePayload = `${iv.toString('hex')}:${authTag}:${encrypted}`;
 
                     await Steganography.embed(safeInputPath, safeOutputPath, securePayload);
-                    console.log("[STEGO] Success! Saving metadata and updating certificate image...");
+                    console.log("[STEGO] Success! Uploading to Supabase Storage...");
 
-                    // Save to DB
+                    // 1. Read the generated file
+                    const stegoFileBuffer = await readFile(safeOutputPath);
+
+                    // 2. Upload to Supabase "certificates" bucket
+                    // Path: uploads/stego/filename_stego.png
+                    const supabasePath = `uploads/stego/${outputFilename}`;
+                    const { data: uploadData, error: uploadError } = await supabase.storage
+                        .from('certificates')
+                        .upload(supabasePath, stegoFileBuffer, {
+                            contentType: 'image/png',
+                            upsert: true
+                        });
+
+                    if (uploadError) {
+                        console.error("[STEGO] Supabase Upload Error:", uploadError);
+                        throw new Error("Gagal upload ke Supabase Storage");
+                    }
+
+                    // 3. Get Public URL
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('certificates')
+                        .getPublicUrl(supabasePath);
+
+                    console.log(`[STEGO] Uploaded to Supabase: ${publicUrl}`);
+
+                    // 4. Update Database with Supabase URL
+                    // Save to DB Metadata
                     await prisma.steganographyMetadata.create({
                         data: {
                             certificateId: id,
                             originalImage: certificate?.image_url || "",
-                            stegoImage: publicStegoUrl,
+                            stegoImage: publicUrl, // Use Supabase URL
                             algorithm: "LSB (RGB)",
-                            encryptionAlgo: "AES-256-GCM", // Update to show encryption used
+                            encryptionAlgo: "AES-256-GCM",
                             encryptionKey: "PROTECTED",
-                            hashValue: hashValue, // Store the actual hash
+                            hashValue: hashValue,
                             createdBy: adminInfo.id,
                             lastVerified: new Date()
                         }
                     });
 
-                    // SYNC: Update Certificate table image_url and stegoImageUrl to the new stego image
+                    // SYNC: Update Certificate table image_url and stego_image_url to the new stego image
                     await prisma.$executeRawUnsafe(
-                        `UPDATE "Certificate" SET "image_url" = $1, "stegoImageUrl" = $1 WHERE id = $2`,
-                        publicStegoUrl,
+                        `UPDATE "certificates" SET "image_url" = $1, "stego_image_url" = $1 WHERE id = $2`,
+                        publicUrl, // Use Supabase URL
                         id
                     );
 
+                    // 5. Cleanup Local File (Optional - commented out for safety/debug, or enable if desired)
+                    // await unlink(safeOutputPath); 
+                    
+                    console.log("[STEGO] Metadata saved and Certificate image synchronized to Cloud.");
+
                     console.log("[STEGO] Metadata saved and Certificate image synchronized.");
-                } catch (stegoError) {
+                } catch (stegoError: any) {
                     console.error("[STEGO] Embedding failed:", stegoError);
+                    // CRITICAL FIX: Throw error to notify admin, don't swallow it!
+                    throw new Error("Gagal menyisipkan steganografi: " + (stegoError.message || stegoError));
                 }
             } else {
                 console.log("[STEGO] Metadata already exists. Skipping.");
@@ -826,24 +893,25 @@ export async function getAdminHistory() {
     try {
         console.log("[QUERY] Fetching admin history via RAW SQL...")
         const rows = await prisma.$queryRawUnsafe(`
-            SELECT h.id, h."certificateId", h.actor_name, h.actor_email, h.action, h.note, h."createdAt",
+            SELECT h.id, h."certificate_id", h.actor_name, h.actor_email, h.action, h.note, h."created_at",
                    h.owner_name, h.owner_email,
                    c.nomor_sertifikat as "certNo", c.nama_lahan, c.status as "certStatus",
                    u.name as "creatorName", u.email as "creatorEmail"
-            FROM "History" h
-            JOIN "Certificate" c ON h."certificateId" = c.id
-            JOIN "User" u ON c."ownerId" = u.id
+            FROM "histories" h
+            JOIN "certificates" c ON h."certificate_id" = c.id
+            JOIN "users" u ON c."owner_id" = u.id
             WHERE c."nomor_sertifikat" NOT LIKE '%_REJECTED_%' 
             AND c."nomor_sertifikat" NOT LIKE '%_PENDING_OVERWRITE_%'
-            ORDER BY h."createdAt" DESC
+            ORDER BY h."created_at" DESC
         `) as any[];
 
         const history = rows.map(r => ({
             ...r,
+            createdAt: r.created_at, // Map snake_case to camelCase
             owner_name: r.owner_name || r.creatorName || "Unknown",
             owner_email: r.owner_email || r.creatorEmail || "Unknown",
             certificate: {
-                id: r.certificateId,
+                id: r.certificate_id,
                 nomor_sertifikat: r.certNo,
                 nama_lahan: r.nama_lahan,
                 status: r.certStatus,
@@ -897,8 +965,8 @@ export async function getCertificateById(id: string) {
         // 1. Fetch main certificate data
         const certs = await prisma.$queryRawUnsafe(
             `SELECT c.*, u.email as "ownerEmail", u.name as "ownerName" 
-             FROM "Certificate" c 
-             JOIN "User" u ON c."ownerId" = u.id 
+             FROM "certificates" c 
+             JOIN "users" u ON c."owner_id" = u.id 
              WHERE c.id = $1 LIMIT 1`,
             id
         ) as any[]
@@ -909,29 +977,58 @@ export async function getCertificateById(id: string) {
 
         const cert = certs[0]
 
-        // 2. Fetch History
-        const history = await prisma.$queryRawUnsafe(
-            `SELECT * FROM "History" WHERE "certificateId" = $1 ORDER BY "createdAt" DESC`,
-            id
-        ) as any[]
+        // 2-4. Fetch Related Data in Parallel (Optimization)
+        const [history, meta, conflicts] = await Promise.all([
+            // 2. Fetch History
+            prisma.$queryRawUnsafe(
+                `SELECT * FROM "histories" WHERE "certificate_id" = $1 ORDER BY "created_at" DESC`,
+                id
+            ) as Promise<any[]>,
 
-        // 3. Fetch SteganographyMetadata
-        const meta = await prisma.$queryRawUnsafe(
-            `SELECT * FROM "SteganographyMetadata" WHERE "certificateId" = $1 LIMIT 1`,
-            id
-        ) as any[]
+            // 3. Fetch SteganographyMetadata
+            prisma.$queryRawUnsafe(
+                `SELECT * FROM "steganography_metadata" WHERE "certificate_id" = $1 LIMIT 1`,
+                id
+            ) as Promise<any[]>,
+
+            // 4. Fetch Conflicts
+             prisma.$queryRawUnsafe(
+                `SELECT c.id, c.status, c."created_at", u.name as "ownerName"
+                 FROM "certificates" c
+                 JOIN "users" u ON c."owner_id" = u.id
+                 WHERE c."nomor_sertifikat" = $1 AND c.id != $2
+                 ORDER BY c."created_at" DESC`,
+                cert.nomor_sertifikat,
+                id
+            ) as Promise<any[]>
+        ]);
 
         // Reconstruct the expected object structure
         const formattedCert = {
             ...cert,
+            // Map snake_case to camelCase for frontend compatibility
+            createdAt: cert.created_at,
+            updatedAt: cert.updated_at,
+            issueDate: cert.issue_date,
+            ownerId: cert.owner_id,
+            verifiedAt: cert.verified_at,
+            rejectedAt: cert.rejected_at,
+            
             owner: {
-                id: cert.ownerId,
+                id: cert.owner_id,
                 name: cert.ownerName,
                 email: cert.ownerEmail
             },
-            history: history || [],
-            steganographyMetadata: meta && meta.length > 0 ? meta[0] : null
-        }
+            history: history.map((h: any) => ({
+                ...h,
+                createdAt: h.created_at
+            })),
+            steganographyMetadata: meta && meta.length > 0 ? {
+                ...meta[0],
+                createdAt: meta[0].created_at
+            } : null,
+            conflicts: conflicts
+        };
 
         return { success: true, certificate: formattedCert };
 
@@ -950,17 +1047,25 @@ export async function getUserNotifications(userId: string) {
         const notifications = await prisma.$queryRawUnsafe(
             `SELECT n.*, 
                     c.nama_lahan as "certName", c.nomor_sertifikat as "certNo"
-             FROM "Notification" n
-             LEFT JOIN "Certificate" c ON n."certificateId" = c.id
-             WHERE n."userId" = $1
+             FROM "notifications" n
+             LEFT JOIN "certificates" c ON n."certificate_id" = c.id
+             WHERE n."user_id" = $1
              AND (c.id IS NULL OR (c."nomor_sertifikat" NOT LIKE '%_REJECTED_%' AND c."nomor_sertifikat" NOT LIKE '%_PENDING_OVERWRITE_%'))
-             ORDER BY n."createdAt" DESC`,
+             ORDER BY n."created_at" DESC`,
             userId
         ) as any[]
 
         console.log(`[ACTION] Found ${notifications.length} notifications for ${userId}`)
 
-        return { success: true, notifications }
+        const mappedNotifications = notifications.map((n: any) => ({
+            ...n,
+            createdAt: n.created_at,
+            userId: n.user_id,
+            certificateId: n.certificate_id,
+            isRead: n.is_read
+        }));
+
+        return { success: true, notifications: mappedNotifications }
     } catch (error) {
         console.error("Get notifications error (Raw):", error)
         return { error: "Gagal mengambil notifikasi" }

@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { TransferModal } from "@/components/TransferModal";
 import { TransferConfirmation } from "@/components/TransferConfirmation";
+import { DownloadButton } from "@/components/DownloadButton";
 import { cookies } from "next/headers";
 
 export default async function CertificateDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -292,25 +293,13 @@ export default async function CertificateDetailPage({ params }: { params: Promis
                                     </div>
                                 )}
 
-                                {(cert.steganographyMetadata?.stegoImage || cert.image_url) && (
-                                    <a
-                                        href={cert.steganographyMetadata?.stegoImage || cert.image_url || '#'}
-                                        download
-                                        target="_blank"
-                                        className="block mt-4 w-full"
-                                    >
-                                        <Button variant="outline" className="w-full h-8 text-xs gap-2">
-                                            {cert.steganographyMetadata?.stegoImage ? (
-                                                <>
-                                                    <ShieldCheck className="w-3 h-3 text-green-600" />
-                                                    Unduh Stego Image (Aman)
-                                                </>
-                                            ) : (
-                                                "Unduh Gambar Asli"
-                                            )}
-                                        </Button>
-                                    </a>
-                                )}
+                                    <div className="mt-4 w-full">
+                                        <DownloadButton 
+                                            url={cert.steganographyMetadata?.stegoImage || cert.image_url || ''}
+                                            filename={`${cert.nama_lahan.replace(/\s+/g, '_')}_${cert.nomor_sertifikat}.png`}
+                                            isStego={!!cert.steganographyMetadata?.stegoImage}
+                                        />
+                                    </div>
                             </CardContent>
                         </Card>
                     </div>
