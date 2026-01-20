@@ -1,0 +1,178 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  email          String          @unique
+  password       String
+  name           String?
+  image          String?         @map("image") // Avatar URL
+  role           Role            @default(USER)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  certificates   Certificate[]
+  notifications  Notification[]
+  adminAuditLogs AdminAuditLog[]
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+  DINAS
+}
+
+model Certificate {
+  id               String @id @default(cuid())
+  nomor_sertifikat String @db.VarChar(50)
+  nama_lahan       String @db.VarChar(200)
+  luas_tanah       String @db.VarChar(50)
+  lokasi           String @db.VarChar(500)
+  status           Status @default(PENDING)
+
+  // Existing fields
+  image_url  String?
+  stego_key  String?
+  keterangan String? @db.Text
+
+  // Priority 1 - Critical fields
+  issueDate       DateTime  @default(now()) @map("issue_date")
+  verifiedBy      String?   @map("verified_by")
+  verifiedAt      DateTime? @map("verified_at")
+  rejectedBy      String?   @map("rejected_by")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectionReason String?   @map("rejection_reason") @db.Text
+
+  // Transfer Info
+  transferToEmail String? @map("transfer_to_email") @db.VarChar(255)
+  transferReason  String? @map("transfer_reason") @db.VarChar(50) // Jual Beli, Warisan, Wakaf
+
+  // Priority 2 - Steganography & Additional fields
+  encryptedData String? @map("encrypted_data") @db.Text
+  stegoImageUrl String? @map("stego_image_url")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  owner                 User                    @relation(fields: [ownerId], references: [id])
+  ownerId               String                  @map("owner_id")
+  history               History[]
+  steganographyMetadata SteganographyMetadata[]
+  Notification          Notification[]
+
+  // Priority 3 - Indexes for performance
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([nomor_sertifikat])
+  @@map("certificates")
+}
+
+enum Status {
+  PENDING
+  VERIFIED
+  REJECTED
+  TRANSFER_PENDING
+  AWAITING_RECIPIENT
+}
+
+model History {
+  id            String      @id @default(cuid())
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  certificateId String      @map("certificate_id")
+  actor_name    String
+  actor_email   String?
+  action        String // Misal: "Pendaftaran", "Verifikasi", "Pengalihan Hak"
+  note          String?     @db.Text
+  owner_name    String?     @db.VarChar(200)
+  owner_email   String?     @db.VarChar(200)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@index([certificateId])
+  @@index([createdAt])
+  @@map("histories")
+}
+
+// Priority 2 - New Model: Steganography Metadata
+model SteganographyMetadata {
+  id            String      @id @default(cuid())
+  certificateId String      @unique @map("certificate_id")
+  certificate   Certificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  // Metadata Steganografi
+  algorithm     String  @db.VarChar(50) // LSB, DCT, DWT, etc.
+  encryptionKey String  @map("encryption_key") // Key untuk enkripsi (hashed)
+  originalImage String? @map("original_image") @db.VarChar(500)
+  stegoImage    String  @map("stego_image") @db.VarChar(500)
+
+  // Metadata Kriptografi
+  encryptionAlgo String? @map("encryption_algo") @db.VarChar(50) // AES, RSA, etc.
+  hashValue      String? @map("hash_value") @db.VarChar(128) // Hash untuk verifikasi integritas
+
+  // Audit Trail
+  createdBy    String    @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastVerified DateTime? @map("last_verified")
+
+  @@index([certificateId])
+  @@map("steganography_metadata")
+}
+
+// Priority 2 - New Model: Notification
+model Notification {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  certificateId String?      @map("certificate_id")
+  certificate   Certificate? @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+
+  title   String           @db.VarChar(200)
+  message String           @db.Text
+  type    NotificationType
+  isRead  Boolean          @default(false) @map("is_read")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  CERTIFICATE_VERIFIED
+  CERTIFICATE_REJECTED
+  CERTIFICATE_PENDING
+  TRANSFER_REQUEST
+  SYSTEM_ALERT
+}
+
+// Priority 2 - New Model: Admin Audit Log
+model AdminAuditLog {
+  id      String @id @default(cuid())
+  adminId String @map("admin_id")
+  admin   User   @relation(fields: [adminId], references: [id])
+
+  action     String  @db.VarChar(100) // LOGIN, APPROVE_CERT, REJECT_CERT, etc.
+  targetType String? @map("target_type") @db.VarChar(50) // Certificate, User, etc.
+  targetId   String? @map("target_id")
+  ipAddress  String? @map("ip_address") @db.VarChar(45) // IPv6 max length
+  userAgent  String? @map("user_agent") @db.VarChar(500)
+  details    Json? // Flexible untuk data tambahan
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([adminId])
+  @@index([createdAt])
+  @@map("admin_audit_logs")
+}

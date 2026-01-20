@@ -1,130 +1,100 @@
-# Web Kripto Steganografi Sertifikat
+# Web Kripto Steganografi Sertifikat 🛡️📜
 
-## Deskripsi Proyek
+Sistem manajemen sertifikat digital berbasis web yang mengintegrasikan teknik **Kriptografi** dan **Steganografi** untuk menjamin keamanan, keaslian, dan integritas data sertifikat. Proyek ini dikembangkan sebagai tugas akhir untuk memfasilitasi pengelolaan sertifikat tanah/sawah secara digital dengan perlindungan data berlapis.
 
-Aplikasi web untuk manajemen sertifikat digital yang mengintegrasikan teknologi kriptografi dan steganografi. Sistem ini memungkinkan pengguna untuk menyimpan, mentransfer, dan memverifikasi kepemilikan sertifikat dengan keamanan tinggi melalui penyembunyian data dalam gambar.
+## 🌟 Fitur Utama
 
-## Fitur Utama
+- **Pendaftaran Sertifikat**: Pengguna dapat mengajukan sertifikat tanah/sawah dengan detail lokasi (koordinat), luas, dan nomor sertifikat.
+- **Steganografi LSB (Least Significant Bit)**: Menyembunyikan metadata autentikasi ke dalam citra sertifikat (PNG) tanpa merusak kualitas visual secara signifikan.
+- **Verifikasi Keaslian**: Fitur verifikasi mandiri dengan mengunggah sertifikat untuk mengekstraksi pesan tersembunyi dan memvalidasi integritasnya.
+- **Pengalihan Hak (Transfer)**: Mekanisme transfer kepemilikan sertifikat yang aman antar pengguna dengan persetujuan admin.
+- **Riwayat Kepemilikan (History)**: Pencatatan otomatis setiap aksi (Pendaftaran, Verifikasi, Pengalihan) untuk audit trail yang transparan.
+- **Sistem Notifikasi**: Pemberitahuan real-time untuk status verifikasi, penolakan, atau permintaan transfer.
+- **Multi-Role User**:
+  - **User**: Mengelola sertifikat pribadi, verifikasi, dan transfer.
+  - **Admin**: Menyetujui pendaftaran, memantau statistik, dan mengelola audit log.
+  - **Dinas**: Akses pengawasan dan pelaporan (Optional/Extended).
 
-- **Autentikasi Pengguna**: Sistem login dan registrasi untuk pengguna dan admin
-- **Manajemen Sertifikat**: Upload, edit, transfer, dan penghapusan sertifikat
-- **Steganografi**: Penyembunyian data sertifikat dalam gambar menggunakan algoritma steganografi
-- **Verifikasi Kepemilikan**: Sistem verifikasi untuk memastikan keaslian sertifikat
-- **Dashboard Admin**: Panel admin untuk mengelola pengguna, sertifikat, dan persetujuan transfer
-- **Riwayat Kepemilikan**: Timeline kepemilikan sertifikat
-- **Notifikasi**: Sistem notifikasi untuk aktivitas penting
+## 🛠️ Teknologi yang Digunakan
 
-## Teknologi yang Digunakan
+### Frontend & UI
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
+- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
+- **Animasi**: [Framer Motion](https://www.framer.com/motion/)
+- **Komponen UI**: [Radix UI](https://www.radix-ui.com/) & [Lucide React](https://lucide.dev/)
+- **Chart**: [Recharts](https://recharts.org/)
 
-- **Frontend**: Next.js 14, TypeScript, Tailwind CSS
-- **Backend**: Next.js API Routes, Prisma ORM
-- **Database**: PostgreSQL (dengan Prisma)
-- **Storage**: Supabase untuk file uploads
-- **Steganografi**: Python dengan library PIL/Pillow
-- **UI Components**: Shadcn/ui
-- **Authentication**: Custom auth dengan session
+### Backend & Database
+- **Runtime**: Node.js & Next.js Server Actions
+- **ORM**: [Prisma](https://www.prisma.io/)
+- **Database**: PostgreSQL (Supabase/Local)
+- **Authentication**: Bcrypt.js (Password Hashing)
 
-## Instalasi
+### Keamanan (Kriptografi & Steganografi)
+- **PNG Analysis**: [pngjs](https://www.npmjs.com/package/pngjs)
+- **Algoritma**: LSB (Least Significant Bit) untuk embedding data.
+- **Integritas**: Hash-based validation untuk memastikan data tidak dimanipulasi.
 
-### Prasyarat
+## 📊 Skema Database
 
-- Node.js 18+
-- Python 3.8+
-- PostgreSQL
-- Supabase account (untuk storage)
+Sistem ini menggunakan struktur data relasional untuk menjaga integritas informasi:
 
-### Langkah Instalasi
+```mermaid
+erDiagram
+    USER ||--o{ CERTIFICATE : owns
+    USER ||--o{ NOTIFICATION : receives
+    USER ||--o{ ADMIN_AUDIT_LOG : performs
+    CERTIFICATE ||--o{ HISTORY : "has history"
+    CERTIFICATE ||--o| STEGANOGRAPHY_METADATA : contains
+```
 
-1. **Clone repository**
+## 🚀 Instalasi & Persiapan
+
+1. **Clone Repositori**:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/ridlofw/web-kripto-steganografi-sertifikat.git
    cd web-kripto-steganografi-sertifikat
    ```
 
-2. **Install dependencies**
+2. **Instal Dependensi**:
    ```bash
    npm install
    ```
 
-3. **Setup database**
-   - Buat database PostgreSQL
-   - Copy `.env.example` ke `.env` dan isi konfigurasi database
-   - Jalankan migrasi Prisma:
-     ```bash
-     npx prisma migrate dev
-     ```
-   - Seed database (opsional):
-     ```bash
-     npx prisma db seed
-     ```
-
-4. **Setup Supabase**
-   - Buat project di Supabase
-   - Konfigurasi bucket untuk uploads
-   - Update environment variables untuk Supabase
-
-5. **Install Python dependencies untuk steganografi**
+3. **Konfigurasi Environment**:
+   Salin file contoh konfigurasi dan sesuaikan isinya dengan kredensial Anda (Supabase, Database, dll):
    ```bash
-   pip install pillow
+   cp .env.example .env
+   ```
+   Buka file `.env` dan isi variabel berikut:
+   - `DATABASE_URL` & `DIRECT_URL` (dari setting Database Supabase)
+   - `NEXT_PUBLIC_SUPABASE_URL` & `ANON_KEY` (dari setting API Supabase)
+   - `STEGANOGRAPHY_KEY` (Generate random 32-byte hex string untuk keamanan)
+
+4. **Setup Database (Prisma)**:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   npm run seed # Opsional: Untuk data awal admin/user
    ```
 
-6. **Jalankan aplikasi**
+5. **Jalankan Aplikasi**:
    ```bash
    npm run dev
    ```
+   Akses di `http://localhost:3000`
 
-Aplikasi akan berjalan di `http://localhost:3000`
+## 📖 Panduan Penggunaan
 
-## Penggunaan
+1. **Registrasi/Login**: Masuk sebagai User atau Admin.
+2. **Pengajuan**: User mengunggah detail sertifikat. Sistem akan melakukan proses steganografi secara otomatis setelah disetujui Admin.
+3. **Verifikasi**: Di halaman Verifikasi, unggah file sertifikat PNG yang telah diunduh. Sistem akan mengekstrak metadata dan mencocokkan dengan database.
+4. **Transfer**: Masukkan email penerima untuk mengalihkan hak kepemilikan sertifikat.
 
-### Untuk Pengguna Biasa
+## 👥 Tim Pengembang
 
-1. **Registrasi/Login**: Buat akun atau login ke sistem
-2. **Upload Sertifikat**: Upload sertifikat dan gambar untuk embedding
-3. **Transfer Sertifikat**: Transfer kepemilikan sertifikat ke pengguna lain
-4. **Verifikasi**: Verifikasi kepemilikan sertifikat melalui halaman verifikasi
+- **Abid** - [GitHub](https://github.com/abidclassroomgit)
+- **Tim Project** - Kontributor
 
-### Untuk Admin
-
-1. **Login Admin**: Akses panel admin
-2. **Kelola Pengguna**: Lihat dan kelola data pengguna
-3. **Persetujuan Transfer**: Approve atau reject permintaan transfer sertifikat
-4. **Monitoring**: Lihat riwayat aktivitas sistem
-
-## Struktur Proyek
-
-```
-web-kripto-steganografi-sertifikat/
-├── src/
-│   ├── app/                 # Next.js app router
-│   ├── components/          # React components
-│   ├── lib/                 # Utilities dan konfigurasi
-│   └── middleware.ts        # Middleware Next.js
-├── prisma/                  # Database schema dan seed
-├── public/                  # Static assets
-├── scripts/                 # Utility scripts
-└── gambar/                  # Sample images
-```
-
-## Scripts yang Tersedia
-
-- `npm run dev`: Jalankan development server
-- `npm run build`: Build untuk production
-- `npm run start`: Jalankan production server
-- `npm run lint`: Jalankan ESLint
-
-## Kontribusi
-
-1. Fork repository
-2. Buat branch fitur baru (`git checkout -b feature/AmazingFeature`)
-3. Commit perubahan (`git commit -m 'Add some AmazingFeature'`)
-4. Push ke branch (`git push origin feature/AmazingFeature`)
-5. Buat Pull Request
-
-## Lisensi
-
-Proyek ini menggunakan lisensi MIT. Lihat file `LICENSE` untuk detail lebih lanjut.
-
-## Kontak
-
-Untuk pertanyaan atau dukungan, silakan buat issue di repository ini.
+---
+*Proyek ini merupakan bagian dari tugas akhir mata kuliah Kriptografi.*
