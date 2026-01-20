@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState("")
+  const [deletePassword, setDeletePassword] = useState("")
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -80,7 +81,7 @@ export default function SettingsPage() {
   const handleUpdateAvatar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
+    
     setLoading(true)
     const formData = new FormData()
     formData.append("avatar", file)
@@ -104,9 +105,9 @@ export default function SettingsPage() {
     const result = await changePassword(null, formData)
     
     if (result.success) {
-      showMessage("success", result.message || "Kata sandi diubah")
+      showMessage("success", result.message || "Kata sandi diubah");
       // Reset form
-      (e.target as HTMLFormElement).reset()
+      (e.currentTarget as HTMLFormElement).reset()
     } else {
       showMessage("error", result.error || "Gagal mengubah kata sandi")
     }
@@ -114,19 +115,33 @@ export default function SettingsPage() {
   }
 
   const handleDeleteAccount = async () => {
+    // Validate confirmation keyword
     if (deleteConfirmation !== "DELETE") {
       showMessage("error", "Ketik DELETE untuk konfirmasi")
       return
     }
 
+    // Validate password input
+    if (!deletePassword) {
+      showMessage("error", "Masukkan kata sandi untuk konfirmasi")
+      return
+    }
+
     setLoading(true)
-    const result = await deleteAccount()
-    
-    if (result.success) {
-      router.push("/login")
-    } else {
-      showMessage("error", result.error || "Gagal menghapus akun")
-      setLoading(false)
+    try {
+        // Call server action with password
+        const result = await deleteAccount(deletePassword)
+        
+        if (result.success) {
+            router.push("/login")
+        } else {
+            showMessage("error", result.error || "Gagal menghapus akun")
+            setLoading(false)
+        }
+    } catch (err) {
+        console.error("Delete account error:", err)
+        showMessage("error", "Terjadi kesalahan sistem")
+        setLoading(false)
     }
   }
 
@@ -382,19 +397,32 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4 max-w-md">
-                    <div className="text-sm text-muted-foreground">
-                      Ketik <strong className="text-foreground">DELETE</strong> untuk konfirmasi.
+                    <div className="space-y-2">
+                         <Label className="text-red-900">Konfirmasi Kata Sandi</Label>
+                         <Input
+                            id="delete-password-input"
+                            type="password"
+                            className="bg-white dark:bg-slate-950 border-red-200 focus-visible:ring-red-500"
+                            placeholder="Masukkan kata sandi Anda"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                         />
                     </div>
-                    <Input
-                      className="bg-white dark:bg-slate-950 border-red-200 focus-visible:ring-red-500"
-                      placeholder="DELETE"
-                      value={deleteConfirmation}
-                      onChange={(e) => setDeleteConfirmation(e.target.value)}
-                    />
+                    <div className="space-y-2">
+                        <div className="text-sm text-muted-foreground">
+                        Ketik <strong className="text-foreground">DELETE</strong> untuk konfirmasi.
+                        </div>
+                        <Input
+                        className="bg-white dark:bg-slate-950 border-red-200 focus-visible:ring-red-500"
+                        placeholder="DELETE"
+                        value={deleteConfirmation}
+                        onChange={(e) => setDeleteConfirmation(e.target.value)}
+                        />
+                    </div>
                   </div>
                 </CardContent>
                 <CardFooter className="pt-6">
-                  <Button variant="destructive" onClick={handleDeleteAccount} disabled={loading || deleteConfirmation !== 'DELETE'}>
+                  <Button variant="destructive" onClick={handleDeleteAccount} disabled={loading || deleteConfirmation !== 'DELETE' || !deletePassword}>
                      {loading ? "Menghapus..." : "Hapus Akun Saya"}
                   </Button>
                 </CardFooter>

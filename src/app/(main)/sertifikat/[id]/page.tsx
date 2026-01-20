@@ -13,6 +13,8 @@ import { DownloadButton } from "@/components/DownloadButton";
 import { OwnershipTimeline } from "@/components/OwnershipTimeline";
 import { cn } from "@/lib/utils";
 import { cookies } from "next/headers";
+import { EditCertificateModal } from "@/components/EditCertificateModal";
+import { DeleteCertificateAction } from "@/components/DeleteCertificateAction";
 
 export default async function CertificateDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -118,7 +120,28 @@ export default async function CertificateDetailPage({ params }: { params: Promis
                          {/* Fallback if no action available */}
                          {!isOwner && cert.status !== 'AWAITING_RECIPIENT' && (
                              <Card className="h-full border-zinc-200 bg-zinc-50/50 flex items-center justify-center">
-                                 <p className="text-xs text-zinc-400 font-medium">Tidak ada aksi tersedia</p>
+                                 <CardContent className="p-6 text-center">
+                                      <p className="text-xs text-zinc-400 font-medium">Tidak ada aksi tersedia</p>
+                                 </CardContent>
+                             </Card>
+                         )}
+
+                         {/* Edit Action for Owner if Pending */}
+                         {isOwner && cert.status === 'PENDING' && (
+                             <Card className="h-full border-amber-200 bg-amber-50">
+                                 <CardContent className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+                                     <div className="bg-white p-3 rounded-full shadow-sm ring-1 ring-amber-200">
+                                         <Clock className="h-6 w-6 text-amber-600" />
+                                     </div>
+                                     <div>
+                                         <h3 className="font-bold text-amber-900">Edit Sertifikat</h3>
+                                         <p className="text-xs text-amber-700 mt-1">Ubah data sebelum diverifikasi</p>
+                                     </div>
+                                     <div className="w-full pt-2 space-y-2">
+                                         <EditCertificateModal cert={cert} />
+                                         <DeleteCertificateAction certId={cert.id} certName={cert.nama_lahan} />
+                                     </div>
+                                 </CardContent>
                              </Card>
                          )}
                     </div>

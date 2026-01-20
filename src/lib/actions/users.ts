@@ -145,13 +145,70 @@ export async function changePassword(prevState: any, formData: FormData) {
     }
 }
 
-export async function deleteAccount() {
+export async function deleteAccount(password: string) {
     const session = await getCurrentUser()
     if (!session) return { error: "Unauthorized" }
 
+    if (!password) {
+        return { error: "Kata sandi diperlukan untuk konfirmasi" }
+    }
+
     try {
-        await prisma.user.delete({
-            where: { id: session.id }
+        const user = await prisma.user.findUnique({
+            where: { id: session.id },
+            include: { certificates: true }
+        })
+
+        if (!user) return { error: "User tidak ditemukan" }
+
+        // 1. Verify Password
+        const isMatch = await bcrypt.compare(password, user.password)
+        if (!isMatch) {
+            return { error: "Kata sandi salah" }
+        }
+
+        // 2. Manual Cascade Delete (Transaction)
+        await prisma.$transaction(async (tx) => {
+            // A. Delete Notifications
+            await tx.notification.deleteMany({
+                where: { userId: session.id }
+            })
+
+            // B. Delete Certificates & Related Data
+            // Note: History & Metadata cascading depends on Schema, but safe to be explicit
+            const certificateIds = user.certificates.map(c => c.id)
+
+            if (certificateIds.length > 0) {
+                // Delete Histories for these certificates
+                await tx.history.deleteMany({
+                    where: { certificateId: { in: certificateIds } }
+                })
+
+                // Delete Stego Metadata
+                await tx.steganographyMetadata.deleteMany({
+                    where: { certificateId: { in: certificateIds } }
+                })
+                
+                // Delete Notifications related to these certificates
+                await tx.notification.deleteMany({
+                    where: { certificateId: { in: certificateIds } }
+                })
+
+                // Delete Certificates
+                await tx.certificate.deleteMany({
+                    where: { ownerId: session.id }
+                })
+            }
+
+            // C. Delete Admin Logs (if any)
+            await tx.adminAuditLog.deleteMany({
+                where: { adminId: session.id }
+            })
+
+            // D. Finally, Delete User
+            await tx.user.delete({
+                where: { id: session.id }
+            })
         })
         
         // Clear session
@@ -161,7 +218,7 @@ export async function deleteAccount() {
         return { success: true }
     } catch (error) {
         console.error("Delete account error:", error)
-        return { error: "Gagal menghapus akun" }
+        return { error: "Gagal menghapus akun: " + (error as Error).message }
     }
 }
 

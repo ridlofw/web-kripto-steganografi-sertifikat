@@ -26,6 +26,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -62,7 +69,8 @@ export default function Home() {
         namaPemegang: "",
         luasTanah: "",
         alamat: "",
-        keterangan: ""
+        keterangan: "",
+        asalHak: ""
     });
 
     useEffect(() => {
@@ -135,6 +143,7 @@ export default function Home() {
         submitData.append("luasTanah", formData.luasTanah);
         submitData.append("alamat", formData.alamat);
         submitData.append("keterangan", formData.keterangan);
+        submitData.append("asalHak", (formData as any).asalHak || "");
 
         // Add defaults/missing from UI but required by Schema
 
@@ -161,7 +170,8 @@ export default function Home() {
                 namaPemegang: currentUser?.name || "",
                 luasTanah: "",
                 alamat: "",
-                keterangan: ""
+                keterangan: "",
+                asalHak: ""
             });
             window.dispatchEvent(new Event("refresh-notifications")); // Sync notifications
             router.refresh(); /* Wait for router refresh might be okay, but event is faster */
@@ -412,6 +422,23 @@ export default function Home() {
                                         m²
                                     </span>
                                 </div>
+                            </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="asal-hak">Asal Hak</Label>
+                                <Select 
+                                    onValueChange={(value) => setFormData({ ...formData, asalHak: value })}
+                                    value={(formData as any).asalHak || ""}
+                                >
+                                    <SelectTrigger id="asal-hak">
+                                        <SelectValue placeholder="Pilih Asal Hak" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Jual Beli">Jual Beli</SelectItem>
+                                        <SelectItem value="Warisan">Warisan</SelectItem>
+                                        <SelectItem value="Wakaf">Wakaf</SelectItem>
+                                        <SelectItem value="Hibah">Hibah</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="grid gap-2">
                                 <Label htmlFor="alamat">Alamat Lokasi</Label>

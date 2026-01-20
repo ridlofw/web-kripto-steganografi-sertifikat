@@ -124,9 +124,11 @@ export async function createCertificate(formData: any) {
         const rows = await prisma.$queryRawUnsafe(`
             INSERT INTO "certificates" (
                 id, nomor_sertifikat, nama_lahan, luas_tanah, lokasi, keterangan, 
-                "owner_id", status, "issue_date", image_url, "created_at", "updated_at"
+                "owner_id", status, "issue_date", image_url, "created_at", "updated_at",
+                "transfer_reason"
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW(),
+                $11
             ) RETURNING *
         `,
             newId,
@@ -138,7 +140,8 @@ export async function createCertificate(formData: any) {
             userId,
             "PENDING",
             new Date(),
-            imageUrl
+            imageUrl,
+            formData.get("asalHak") as string // $11
         ) as any[];
 
         if (!rows || rows.length === 0) {
@@ -180,6 +183,92 @@ export async function createCertificate(formData: any) {
         }
 
         return { error: "Gagal menambahkan sertifikat: " + (error.message || error) }
+    }
+}
+
+export async function updateCertificate(certId: string, formData: any) {
+    const cookieStore = await cookies()
+    const sessionValue = cookieStore.get("user_session")?.value
+
+    if (!sessionValue) return { error: "Silakan login terlebih dahulu" }
+
+    try {
+        const session = JSON.parse(sessionValue)
+        const userId = session.id
+
+        // 1. Check ownership and status
+        const existingCert = await prisma.certificate.findUnique({
+            where: { id: certId }
+        })
+
+        if (!existingCert) return { error: "Sertifikat tidak ditemukan" }
+        
+        if (existingCert.ownerId !== userId) {
+            return { error: "Anda tidak memiliki izin mengedit sertifikat ini" }
+        }
+
+        if (existingCert.status !== 'PENDING') {
+            return { error: "Hanya sertifikat berstatus PENDING yang dapat diedit" }
+        }
+
+        // 2. Handle File Upload (Optional)
+        const file = formData.get("file") as File
+        let imageUrl = existingCert.image_url // Keep old image by default
+
+        if (file && file.size > 0) {
+            const buffer = Buffer.from(await file.arrayBuffer())
+            const uploadDir = path.join(process.cwd(), "public", "uploads")
+            await mkdir(uploadDir, { recursive: true })
+
+            const timestamp = Date.now()
+            const safeName = file.name.replace(/[^a-z0-9.]/gi, '_').toLowerCase()
+            const filename = `cert_${timestamp}_${safeName}`
+            const filePath = path.join(uploadDir, filename)
+
+            await writeFile(filePath, buffer)
+            imageUrl = `/uploads/${filename}`
+        }
+
+        // 3. Update Database
+        const updatedCert = await prisma.certificate.update({
+            where: { id: certId },
+            data: {
+                nomor_sertifikat: formData.get("nomorSertifikat"),
+                nama_lahan: formData.get("namaSertifikat"),
+                luas_tanah: formData.get("luasTanah"),
+                lokasi: formData.get("alamat"),
+                keterangan: formData.get("keterangan"),
+                transferReason: formData.get("asalHak"), // Update Transaction Type
+                image_url: imageUrl,
+                updatedAt: new Date()
+            }
+        })
+
+        // Add history log for update
+        await prisma.history.create({
+            data: {
+                certificateId: certId,
+                action: "UPDATE",
+                actor_name: session.name || "User",
+                actor_email: session.email,
+                note: "Sertifikat diperbarui oleh pemilik",
+                owner_name: session.name || "User",
+                owner_email: session.email
+            }
+        })
+
+        revalidatePath(`/sertifikat/${certId}`)
+        revalidatePath("/sertifikat")
+        revalidatePath("/")
+        
+        return { success: true, certificate: updatedCert }
+
+    } catch (error: any) {
+         console.error("Update certificate error:", error)
+         if (error.code === 'P2002') {
+             return { error: "DUPLICATE_NUMBER" }
+        }
+        return { error: "Gagal mengupdate sertifikat: " + error.message }
     }
 }
 
@@ -778,6 +867,7 @@ export async function updateCertificateStatus(id: string, status: "VERIFIED" | "
                         verifiedAt: verifiedDate instanceof Date ? verifiedDate.toISOString() : new Date(verifiedDate).toISOString(),
                         validator: adminInfo.name,
                         serial: (certificate as any)?.nomor_sertifikat,
+                        transactionType: (certificate as any)?.transfer_reason || "Initial Registration", 
                         history: historySummary.map(h => ({
                             ...h,
                             d: h.d instanceof Date ? h.d.toISOString() : h.d
@@ -1266,7 +1356,7 @@ export async function verifyCertificateImage(formData: FormData) {
         `);
 
         // 3. Hash Integrity Check (Digital Signature)
-        const dbHash = certificate.steganographyMetadata?.hashValue;
+        const dbHash = certificate.steganographyMetadata?.[0]?.hashValue;
 
         // Recalculate hash from the hidden data to ensure it hasn't been tampered with
         const recalculatedHash = crypto.createHash('sha256').update(JSON.stringify(hiddenData)).digest('hex');
@@ -1355,9 +1445,9 @@ export async function deleteCertificate(certId: string) {
             return { error: "Anda tidak memiliki akses untuk menghapus sertifikat ini" }
         }
 
-        // 3. Check Status (Only REJECTED can be deleted by user for now, as requested)
-        if (cert.status !== "REJECTED") {
-            return { error: "Hanya sertifikat yang ditolak yang dapat dihapus" }
+        // 3. Check Status (Allow PENDING and REJECTED)
+        if (cert.status !== "REJECTED" && cert.status !== "PENDING") {
+            return { error: "Hanya sertifikat yang ditolak atau pending yang dapat dihapus" }
         }
 
         // 4. Delete
